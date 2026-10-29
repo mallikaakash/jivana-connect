@@ -1,0 +1,20 @@
+{
+  "name": "clini-ai",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "implement": "node scripts/implement-spec.mjs",
+    "implement:cursor": "node scripts/implement-spec.mjs --engine cursor",
+    "implement:claude": "node scripts/implement-spec.mjs --engine claude",
+    "implement:cloud": "node scripts/implement-spec.mjs --engine cursor --cloud --detach",
+    "monitor": "node scripts/monitor-run.mjs",
+    "cursor:login": "node scripts/cursor-auth.mjs --login",
+    "cursor:auth": "node scripts/cursor-auth.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@cursor/sdk": "^1.2.0"
+  }
+}
