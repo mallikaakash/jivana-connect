@@ -52,7 +52,7 @@ export default function CallDetailPage() {
       <RefreshError error={error} reload={reload} />
 
       {active && (
-        <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="mb-6 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <Loader2 className="h-4 w-4 animate-spin" />
           Call is {label(call.status).toLowerCase()}. This page refreshes automatically until the result is processed.
         </div>
@@ -62,16 +62,16 @@ export default function CallDetailPage() {
         <div className="space-y-6 lg:col-span-2">
           <Card title="Status">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Call status</div>
+              <div className="rounded-xl border border-slate-200 p-3">
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Call status</div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <StatusBadge value={call.status} />
                   {call.outcome && <StatusBadge value={call.outcome} text={`Outcome: ${label(call.outcome)}`} />}
                 </div>
                 <Note className="mt-2">Whether the conversation itself happened and finished.</Note>
               </div>
-              <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Task status</div>
+              <div className="rounded-xl border border-slate-200 p-3">
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Task status</div>
                 <div className="mt-1.5">
                   <StatusBadge value={task.status} />
                 </div>

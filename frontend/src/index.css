@@ -1,32 +1,252 @@
 @import 'tailwindcss';
 
+/*
+ * Jivana design tokens (from jivana-three.vercel.app): warm paper, deep forest, leaf/sage
+ * greens, clay accent. The legacy palette names used across pages (navy, teal, slate, emerald,
+ * amber, red, sky, violet, white) are remapped onto this system so every page re-themes at once.
+ */
 @theme {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Fraunces', ui-serif, Georgia, serif;
 
-  --color-navy-50: #eef2f8;
-  --color-navy-100: #d6dfee;
-  --color-navy-200: #aebfdc;
-  --color-navy-500: #3a5288;
-  --color-navy-700: #1e3160;
-  --color-navy-800: #172649;
-  --color-navy-900: #0f1b36;
+  --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
 
-  --color-teal-50: #ecfaf8;
-  --color-teal-100: #cdf1ec;
-  --color-teal-500: #14a394;
-  --color-teal-600: #0e8a7d;
-  --color-teal-700: #0b6f65;
+  /* navy → forest (navigation, headings) */
+  --color-navy-50: #eef2ee;
+  --color-navy-100: #dfe7df;
+  --color-navy-200: #b9c8bb;
+  --color-navy-500: #4a5f50;
+  --color-navy-700: #2a3d30;
+  --color-navy-800: #1e2e24;
+  --color-navy-900: #16231b;
 
-  --color-page: #f3f6fa;
+  /* teal → leaf (actions, progress, links) */
+  --color-teal-50: #eef4ec;
+  --color-teal-100: #dce7d8;
+  --color-teal-300: #a9c4a6;
+  --color-teal-500: #5f8a66;
+  --color-teal-600: #3f6b4a;
+  --color-teal-700: #33583c;
+
+  /* slate → warm neutral ink */
+  --color-slate-50: #f6f2ea;
+  --color-slate-100: #eee9de;
+  --color-slate-200: #e4ddcf;
+  --color-slate-300: #d2cab9;
+  --color-slate-400: #9b968b;
+  --color-slate-500: #77736a;
+  --color-slate-600: #5d5b54;
+  --color-slate-700: #46463f;
+  --color-slate-800: #2f3430;
+  --color-slate-900: #1e2420;
+
+  /* card surface: warm off-white instead of pure white */
+  --color-white: #fdfbf6;
+
+  /* emerald → sage/leaf (complete, confirmed) */
+  --color-emerald-50: #ebf2e8;
+  --color-emerald-100: #dce8d7;
+  --color-emerald-200: #c3d8c0;
+  --color-emerald-300: #a9c7a5;
+  --color-emerald-400: #7fa382;
+  --color-emerald-500: #5c8c63;
+  --color-emerald-600: #3f6b4a;
+  --color-emerald-700: #345a3e;
+  --color-emerald-800: #284632;
+
+  /* amber → honey ochre (pending, needs attention) */
+  --color-amber-50: #fbf4e4;
+  --color-amber-100: #f6e7c6;
+  --color-amber-200: #eed6a2;
+  --color-amber-300: #e3c07b;
+  --color-amber-400: #d6a653;
+  --color-amber-500: #c48d31;
+  --color-amber-600: #a47322;
+  --color-amber-700: #835a1b;
+  --color-amber-800: #6a4817;
+  --color-amber-900: #553a14;
+
+  /* red → brick clay (urgent, escalation) */
+  --color-red-50: #fbefe9;
+  --color-red-100: #f5dccf;
+  --color-red-200: #ecc2ae;
+  --color-red-300: #e2a98c;
+  --color-red-500: #c0603f;
+  --color-red-600: #a94c30;
+  --color-red-700: #8e3d26;
+  --color-red-800: #73311f;
+
+  /* sky → dusk blue-green (simulated / informational) */
+  --color-sky-50: #edf3f2;
+  --color-sky-200: #cadbd9;
+  --color-sky-300: #a9c3c1;
+  --color-sky-500: #5f8b8a;
+  --color-sky-600: #4b7473;
+  --color-sky-700: #3c5f5e;
+  --color-sky-900: #24403f;
+
+  /* violet → clay (demo / prototype labels) */
+  --color-violet-50: #fbf0e8;
+  --color-violet-300: #e2a98c;
+  --color-violet-600: #b0603c;
+  --color-violet-700: #9a5233;
+
+  --color-page: #f4f0e7;
+
+  --shadow-sm: 0 1px 2px rgb(30 46 36 / 0.04), 0 18px 40px -32px rgb(30 46 36 / 0.45);
+  --shadow-lift: 0 2px 4px rgb(30 46 36 / 0.04), 0 28px 60px -36px rgb(30 46 36 / 0.6);
+  --shadow-xl: 0 40px 90px -40px rgb(30 46 36 / 0.65);
+
+  --animate-rise: rise 0.7s var(--ease-soft) both;
+  --animate-fade: fade 0.5s var(--ease-soft) both;
+  --animate-pop: pop 0.45s var(--ease-soft) both;
+  --animate-breathe: breathe 9s var(--ease-soft) infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-ping-soft: ping-soft 1.8s var(--ease-soft) infinite;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes breathe {
+    0%,
+    100% {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.85;
+      transform: scale(1.08);
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+  @keyframes ping-soft {
+    0% {
+      transform: scale(1);
+      opacity: 0.6;
+    }
+    80%,
+    100% {
+      transform: scale(2.6);
+      opacity: 0;
+    }
+  }
 }
 
-html,
-body,
-#root {
-  height: 100%;
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-page text-slate-800 antialiased;
+    font-family: var(--font-sans);
+    font-feature-settings: 'ss01', 'tnum';
+  }
+
+  h1 {
+    font-family: var(--font-serif);
+    font-optical-sizing: auto;
+    letter-spacing: -0.02em;
+  }
+
+  ::selection {
+    background: var(--color-emerald-200);
+    color: var(--color-navy-900);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-teal-500);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  input,
+  select,
+  textarea {
+    transition:
+      border-color 0.2s var(--ease-soft),
+      box-shadow 0.2s var(--ease-soft),
+      background-color 0.2s var(--ease-soft);
+  }
 }
 
-body {
-  @apply bg-page text-slate-800 antialiased;
-  font-family: var(--font-sans);
+@layer utilities {
+  /* Children rise in one after another (cards, rows, list items). */
+  .stagger > * {
+    animation: var(--animate-rise);
+  }
+  .stagger > *:nth-child(1) { animation-delay: 30ms; }
+  .stagger > *:nth-child(2) { animation-delay: 80ms; }
+  .stagger > *:nth-child(3) { animation-delay: 130ms; }
+  .stagger > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger > *:nth-child(5) { animation-delay: 230ms; }
+  .stagger > *:nth-child(6) { animation-delay: 280ms; }
+  .stagger > *:nth-child(7) { animation-delay: 330ms; }
+  .stagger > *:nth-child(8) { animation-delay: 380ms; }
+  .stagger > *:nth-child(n + 9) { animation-delay: 420ms; }
+
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-slate-400);
+  }
+
+  .skeleton {
+    border-radius: 8px;
+    background: linear-gradient(90deg, var(--color-slate-100) 0%, var(--color-slate-50) 40%, var(--color-slate-100) 80%);
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  /* Faint paper grain so large surfaces don't look flat. */
+  .grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.18 0 0 0 0 0.14 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

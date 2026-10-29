@@ -104,19 +104,19 @@ export default function TaskDetailPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
-            <span className="rounded-md bg-navy-50 px-1.5 py-0.5 text-navy-700">{label(task.task_type)}</span>
+            <span className="rounded-full bg-navy-50 px-1.5 py-0.5 text-navy-700">{label(task.task_type)}</span>
             <span>{task.department}</span>
             <span className="text-slate-300">·</span>
             <span className="font-mono text-[11px]">{task.task_id}</span>
             <DemoBadge />
           </div>
-          <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-navy-900">{task.title}</h1>
+          <h1 className="mt-2 text-[2.25rem] leading-[1.1] font-light text-navy-900">{task.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className={clsx('rounded-full transition-all duration-500', statusChanged && 'ring-2 ring-teal-500 ring-offset-2')}>
               <StatusBadge value={task.status} />
             </span>
             <StatusBadge value={task.priority} text={`${label(task.priority)} priority`} />
-            <span className={clsx('inline-flex items-center gap-1 text-xs', overdue ? 'font-semibold text-red-600' : 'text-slate-500')} title={formatDateTime(task.due_at)}>
+            <span className={clsx('inline-flex items-center gap-1 text-xs', overdue ? 'font-medium text-red-600' : 'text-slate-500')} title={formatDateTime(task.due_at)}>
               <Clock className="h-3.5 w-3.5" />
               {overdue ? 'Overdue · ' : 'Due '}
               {relativeTime(task.due_at)} · {formatDateTime(task.due_at)}
@@ -125,14 +125,14 @@ export default function TaskDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="stagger grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           {/* Next action + call control */}
-          <section className="rounded-xl border border-slate-200 border-l-4 border-l-teal-500 bg-white p-4 shadow-sm">
+          <section className="rounded-2xl border border-slate-200 border-l-4 border-l-teal-500 bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-700">Next action</p>
-                <p className="mt-1 text-lg font-semibold text-navy-900">{task.next_action}</p>
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-teal-700">Next action</p>
+                <p className="mt-1.5 font-serif text-[1.6rem] leading-snug font-light tracking-[-0.02em] text-navy-900">{task.next_action}</p>
                 <p className="mt-1 text-xs text-slate-500">
                   Attempts: <span className="font-medium text-slate-700">{task.attempt_count} of {MAX_ATTEMPTS}</span>
                   {task.last_attempt_at && ` · last ${relativeTime(task.last_attempt_at)}`}
@@ -172,8 +172,8 @@ export default function TaskDetailPage() {
           {/* Purpose + safe context */}
           <Card title="Why Jiya is calling">
             <p className="text-sm text-slate-800">{task.purpose}</p>
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
                 <Bot className="h-3.5 w-3.5" /> Safe call context passed to Jiya
               </p>
               <p className="mt-1.5 text-sm text-slate-700">{task.call_context}</p>
@@ -255,11 +255,11 @@ export default function TaskDetailPage() {
           {task.escalation_id && (
             <Link
               to={`/escalations/${task.escalation_id}`}
-              className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm hover:bg-red-100/60"
+              className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm hover:bg-red-100/60"
             >
               <AlertTriangle className="h-5 w-5 shrink-0" />
               <span className="flex-1">
-                <span className="block font-semibold">Escalation linked</span>
+                <span className="block font-medium">Escalation linked</span>
                 <span className="text-xs">Routed for staff review — open escalation</span>
               </span>
               <ChevronRight className="h-4 w-4" />
@@ -285,7 +285,7 @@ export default function TaskDetailPage() {
         <p>
           Jiya will call <span className="font-medium text-navy-800">{patient.display_name}</span> about:
         </p>
-        <p className="mt-1.5 rounded-lg bg-slate-50 px-3 py-2 text-slate-700">{task.purpose}</p>
+        <p className="mt-1.5 rounded-xl bg-slate-50 px-3 py-2 text-slate-700">{task.purpose}</p>
         <p className="mt-2 text-xs text-slate-500">In live mode this places a real phone call to the demo recipient.</p>
         {voiceMode && (
           <p className="mt-2">

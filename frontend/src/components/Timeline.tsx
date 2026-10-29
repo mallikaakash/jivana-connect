@@ -21,17 +21,17 @@ export function Timeline({ events, compact, emptyTitle = 'No activity yet' }: { 
   if (events.length === 0) return <EmptyState title={emptyTitle} />
   const sorted = [...events].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
   return (
-    <ol className="space-y-3">
+    <ol className="stagger relative space-y-4 before:absolute before:top-2 before:bottom-2 before:left-[13px] before:w-px before:bg-slate-200">
       {sorted.map((e) => {
         const { icon: Icon, className } = ICONS[e.event_type] ?? { icon: Bot, className: 'bg-slate-100 text-slate-500' }
         return (
-          <li key={e.event_id} className="flex gap-3">
-            <span className={clsx('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full', className)}>
+          <li key={e.event_id} className="group relative flex gap-3">
+            <span className={clsx('relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-4 ring-white transition-transform duration-300 ease-soft group-hover:scale-110', className)}>
               <Icon className="h-3.5 w-3.5" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-slate-800">{e.message}</p>
-              <p className="text-xs text-slate-400" title={formatDateTime(e.timestamp)}>
+              <p className="text-sm leading-snug text-slate-800">{e.message}</p>
+              <p className="mt-0.5 text-xs text-slate-400" title={formatDateTime(e.timestamp)}>
                 {relativeTime(e.timestamp)}
                 {!compact && ` · ${formatDateTime(e.timestamp)}`} · {label(e.actor)}
               </p>

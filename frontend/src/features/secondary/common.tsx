@@ -9,7 +9,7 @@ import { isNotFound } from './helpers'
 /** Friendly not-found state with a link back to the list page. */
 export function NotFoundState({ what, backTo, backLabel }: { what: string; backTo: string; backLabel: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <EmptyState
         icon={<SearchX className="h-8 w-8" />}
         title={`${what} not found`}
@@ -96,7 +96,7 @@ export function FilterSelect<V extends string>({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as V)}
-        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+        className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>

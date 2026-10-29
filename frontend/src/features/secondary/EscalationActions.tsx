@@ -9,7 +9,7 @@ import { Note } from './common'
 const AUTHOR = 'Demo staff'
 
 const INPUT_CLASS =
-  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:bg-slate-50'
+  'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:bg-slate-50'
 
 const DONE_TEXT: Record<EscalationAction, string> = {
   acknowledge: 'Acknowledgement recorded',
@@ -104,7 +104,7 @@ export function EscalationActions({ escalation, onUpdated }: { escalation: Escal
 
       {(status === 'open' || status === 'acknowledged') && (
         <form onSubmit={submitAssign} className="space-y-2">
-          <label htmlFor="esc-assignee" className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+          <label htmlFor="esc-assignee" className="block text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
             Assign to
           </label>
           <div className="flex gap-2">
@@ -130,7 +130,7 @@ export function EscalationActions({ escalation, onUpdated }: { escalation: Escal
       )}
 
       <form onSubmit={submitNote} className="space-y-2">
-        <label htmlFor="esc-note" className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+        <label htmlFor="esc-note" className="block text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
           Add note
         </label>
         <textarea

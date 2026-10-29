@@ -48,7 +48,7 @@ export default function SettingsPage() {
         }
       />
 
-      <div className="mb-6 flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+      <div className="mb-6 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
         <Info className="mt-0.5 h-4 w-4 shrink-0" />
         <p>
           This page only displays how the prototype is running. There are no editable configuration controls here; integrations marked “Not configured” are

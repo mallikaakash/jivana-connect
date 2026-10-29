@@ -10,7 +10,7 @@ export function Transcript({ turns }: { turns: TranscriptTurn[] }) {
         return (
           <li key={i} className={clsx('flex', agent ? 'justify-start' : 'justify-end')}>
             <div className={clsx('max-w-[85%] sm:max-w-[75%]')}>
-              <div className={clsx('mb-0.5 text-[11px] font-medium uppercase tracking-wide', agent ? 'text-teal-700' : 'text-right text-slate-400')}>
+              <div className={clsx('mb-0.5 text-[11px] font-medium uppercase tracking-[0.16em]', agent ? 'text-teal-700' : 'text-right text-slate-400')}>
                 {agent ? 'Jiya' : 'Patient'}
               </div>
               <div

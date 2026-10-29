@@ -38,7 +38,8 @@ export default function OverviewPage() {
   return (
     <div>
       <PageHeader
-        title="Overview"
+        title={greeting()}
+        accent="Here's what needs you today."
         subtitle={
           <span className="inline-flex flex-wrap items-center gap-2">
             What needs attention today, what Jiya completed, and what needs a human. <DemoBadge>DEMO DATA</DemoBadge>
@@ -79,7 +80,7 @@ function Dashboard({ data, error, onRetry }: { data: DashboardSummary; error?: E
       {error && <ErrorBanner error={`Could not refresh: ${error.message}`} onRetry={onRetry} />}
 
       {/* Row 1 — summary cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="stagger grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <CardLink to="/patients">
           <SummaryCard label="Patients" value={data.patients_count} hint="Synthetic demo patients" icon={<Users className="h-4 w-4" />} tone="blue" />
         </CardLink>
@@ -87,7 +88,7 @@ function Dashboard({ data, error, onRetry }: { data: DashboardSummary; error?: E
           <SummaryCard label="Follow-ups due" value={data.followups_due_count} hint="Pending or due by end of today" icon={<ListChecks className="h-4 w-4" />} tone="amber" />
         </CardLink>
         <CardLink to="/calls">
-          <SummaryCard label="Calls completed (last 7 days)" value={data.calls_completed_count} hint="No-answer and failed attempts excluded" icon={<PhoneCall className="h-4 w-4" />} tone="green" />
+          <SummaryCard label="Calls completed" value={data.calls_completed_count} hint="Last 7 days · no-answer and failed excluded" icon={<PhoneCall className="h-4 w-4" />} tone="green" />
         </CardLink>
         <CardLink to="/escalations">
           <SummaryCard label="Open escalations" value={data.open_escalations_count} hint="Awaiting staff review or action" icon={<AlertTriangle className="h-4 w-4" />} tone={data.open_escalations_count ? 'red' : 'grey'} />
@@ -95,13 +96,13 @@ function Dashboard({ data, error, onRetry }: { data: DashboardSummary; error?: E
       </div>
 
       {/* Row 2 — needs attention + recent calls */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="stagger grid gap-6 lg:grid-cols-3">
         <Card
           className="lg:col-span-2"
           title={
             <span className="flex items-center gap-2">
               Needs attention
-              {data.needs_attention.length > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">{data.needs_attention.length}</span>}
+              {data.needs_attention.length > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">{data.needs_attention.length}</span>}
             </span>
           }
           actions={
@@ -181,7 +182,7 @@ function Dashboard({ data, error, onRetry }: { data: DashboardSummary; error?: E
       </div>
 
       {/* Row 3 — follow-up queue + activity */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="stagger grid gap-6 lg:grid-cols-3">
         <Card
           className="lg:col-span-2"
           title="Follow-up queue"
@@ -206,7 +207,7 @@ function Dashboard({ data, error, onRetry }: { data: DashboardSummary; error?: E
                         {label(t.task_type)} · {t.patient_name}
                       </p>
                     </div>
-                    <span className={clsx('whitespace-nowrap text-xs', overdue ? 'font-semibold text-red-600' : 'text-slate-500')} title={formatDateTime(t.due_at)}>
+                    <span className={clsx('whitespace-nowrap text-xs', overdue ? 'font-medium text-red-600' : 'text-slate-500')} title={formatDateTime(t.due_at)}>
                       {overdue ? 'Overdue · ' : 'Due '}
                       {relativeTime(t.due_at)}
                     </span>
@@ -231,8 +232,13 @@ function Dashboard({ data, error, onRetry }: { data: DashboardSummary; error?: E
 
 function CardLink({ to, children }: { to: string; children: ReactNode }) {
   return (
-    <Link to={to} className="block rounded-xl transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-teal-500">
+    <Link to={to} className="block rounded-2xl transition-shadow hover:shadow-lift focus-visible:outline-2 focus-visible:outline-teal-500">
       {children}
     </Link>
   )
+}
+
+function greeting(): string {
+  const hour = Number(new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false }))
+  return hour < 12 ? 'Good morning.' : hour < 17 ? 'Good afternoon.' : 'Good evening.'
 }

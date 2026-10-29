@@ -93,7 +93,7 @@ export default function PatientsPage() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name or demo ID"
               aria-label="Search patients by name or demo ID"
-              className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="w-full rounded-xl border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
           <FilterSelect

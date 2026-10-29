@@ -47,7 +47,7 @@ export function LiveCallPanel({ call, task, trail }: { call: Call; task: Task; t
     <section
       aria-live="polite"
       className={clsx(
-        'overflow-hidden rounded-xl border-2 bg-white shadow-sm transition-colors',
+        'overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-colors',
         terminal ? (failedEnd ? 'border-amber-300' : 'border-emerald-300') : 'border-teal-300',
       )}
     >
@@ -58,11 +58,11 @@ export function LiveCallPanel({ call, task, trail }: { call: Call; task: Task; t
             terminal ? (failedEnd ? 'bg-amber-500' : 'bg-emerald-600') : 'bg-teal-600',
           )}
         >
-          {!terminal && <span className="absolute inset-0 animate-ping rounded-full bg-teal-500/40" />}
+          {!terminal && <span className="absolute inset-0 animate-ping-soft rounded-full bg-teal-500/40" />}
           {failedEnd ? <PhoneMissed className="relative h-4 w-4" /> : <PhoneCall className="relative h-4 w-4" />}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-navy-900">{headline(call)}</p>
+          <p className="text-sm font-medium text-navy-900">{headline(call)}</p>
           <p className="text-xs text-slate-500">
             Call status: <span className="font-medium text-slate-700">{label(call.status)}</span>
             {!terminal && ' · updating every 2 s'}
@@ -85,7 +85,7 @@ export function LiveCallPanel({ call, task, trail }: { call: Call; task: Task; t
               <li key={s} className="flex flex-1 items-center gap-2">
                 <span
                   className={clsx(
-                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium',
                     done && 'bg-emerald-600 text-white',
                     active && 'bg-teal-600 text-white',
                     failed && 'bg-amber-500 text-white',
@@ -105,7 +105,7 @@ export function LiveCallPanel({ call, task, trail }: { call: Call; task: Task; t
 
         {/* Task status transition — separate from call status */}
         <div>
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">Task status (tracked separately from the call)</p>
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">Task status (tracked separately from the call)</p>
           <div className="flex flex-wrap items-center gap-2">
             {trail.map((s, i) => {
               const last = i === trail.length - 1
@@ -123,15 +123,15 @@ export function LiveCallPanel({ call, task, trail }: { call: Call; task: Task; t
         </div>
 
         {terminal && (
-          <div className="grid gap-4 rounded-lg bg-slate-50 p-3 sm:grid-cols-2">
+          <div className="grid gap-4 rounded-xl bg-slate-50 p-3 sm:grid-cols-2">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Extracted outcome</p>
+              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">Extracted outcome</p>
               <div className="mt-1">{call.outcome ? <StatusBadge value={call.outcome} /> : <span className="text-sm text-slate-500">No outcome (call not answered)</span>}</div>
               {call.summary && <p className="mt-2 text-sm text-slate-700">{call.summary}</p>}
             </div>
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Next action</p>
-              <p className="mt-1 text-sm font-semibold text-navy-900">{task.next_action}</p>
+              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">Next action</p>
+              <p className="mt-1 text-sm font-medium text-navy-900">{task.next_action}</p>
               {call.processing_result && <p className="mt-2 text-xs text-slate-500">Backend: {call.processing_result}</p>}
             </div>
           </div>

@@ -43,7 +43,7 @@ const COLUMNS: Column<Row>[] = [
     render: (t) => {
       const overdue = isTaskOverdue(t)
       return (
-        <span title={formatDateTime(t.due_at)} className={clsx('whitespace-nowrap text-sm underline decoration-dotted decoration-slate-300 underline-offset-4', overdue ? 'font-semibold text-red-600' : 'text-slate-700')}>
+        <span title={formatDateTime(t.due_at)} className={clsx('whitespace-nowrap text-sm underline decoration-dotted decoration-slate-300 underline-offset-4', overdue ? 'font-medium text-red-600' : 'text-slate-700')}>
           {overdue ? `Overdue · ${relativeTime(t.due_at)}` : relativeTime(t.due_at)}
         </span>
       )

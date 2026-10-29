@@ -32,23 +32,27 @@ export function DataTable<T>({
     <div className="-mx-4 overflow-x-auto">
       <table className="min-w-full text-left text-sm">
         <thead>
-          <tr className="border-b border-slate-100 text-xs font-medium uppercase tracking-wide text-slate-400">
+          <tr className="border-b border-slate-200/70 text-[10.5px] font-medium uppercase tracking-[0.16em] text-slate-400">
             {columns.map((c) => (
-              <th key={c.key} className={clsx('whitespace-nowrap px-4 py-2 font-medium', c.className)}>
+              <th key={c.key} className={clsx('whitespace-nowrap px-4 py-2.5 font-medium', c.className)}>
                 {c.header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="stagger divide-y divide-slate-100">
           {rows.map((row) => (
             <tr
               key={rowKey(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
-              className={clsx(onRowClick && 'cursor-pointer hover:bg-slate-50', rowClassName?.(row))}
+              className={clsx(
+                'transition-colors duration-300 ease-soft',
+                onRowClick && 'group/row cursor-pointer hover:bg-emerald-50/50 [&>td:first-child]:shadow-[inset_0_0_0_0_var(--color-teal-500)] hover:[&>td:first-child]:shadow-[inset_3px_0_0_0_var(--color-teal-500)]',
+                rowClassName?.(row),
+              )}
             >
               {columns.map((c) => (
-                <td key={c.key} className={clsx('px-4 py-3 align-top', c.className)}>
+                <td key={c.key} className={clsx('px-4 py-3.5 align-top transition-shadow duration-300 ease-soft', c.className)}>
                   {c.render(row)}
                 </td>
               ))}
