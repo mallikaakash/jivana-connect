@@ -1,0 +1,216 @@
+import { useParams } from 'react-router-dom'
+import { api, type Appointment, type Call, type Escalation, type Task } from '@/api'
+import { PatientSummary } from '@/components/PatientSummary'
+import { Timeline } from '@/components/Timeline'
+import { Card, DemoBadge, DetailList, EmptyState, PageHeader, StatusBadge } from '@/components/ui'
+import { appointmentNextStep } from '@/features/secondary/appointmentNextStep'
+import { BackLink, LoadGate, RefreshError, TextLink, VoiceModeBadge } from '@/features/secondary/common'
+import { comparePriority, formatDateTime, label, relativeTime } from '@/lib/format'
+import { useAsync } from '@/lib/useAsync'
+
+const CLOSED_TASK_STATUSES = ['completed', 'cancelled']
+
+function AppointmentItem({ appt }: { appt: Appointment }) {
+  return (
+    <li className="py-3 first:pt-0 last:pb-0">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="text-sm font-medium text-navy-800">
+            {appt.department} · {appt.clinician}
+          </div>
+          <div className="text-xs text-slate-500">
+            {formatDateTime(appt.scheduled_at)} ({relativeTime(appt.scheduled_at)})
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <StatusBadge value={appt.booking_status} text={`Booking: ${label(appt.booking_status)}`} />
+          <StatusBadge value={appt.confirmation_state} text={`Confirmation: ${label(appt.confirmation_state)}`} />
+        </div>
+      </div>
+      <div className="mt-1 text-xs text-slate-600">
+        Next step: <span className="font-medium">{appointmentNextStep(appt)}</span>
+        {appt.task_id && (
+          <>
+            {' · '}
+            <TextLink to={`/tasks/${appt.task_id}`}>Related task</TextLink>
+          </>
+        )}
+      </div>
+    </li>
+  )
+}
+
+function TaskItem({ task }: { task: Task }) {
+  return (
+    <li className="py-3 first:pt-0 last:pb-0">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <TextLink to={`/tasks/${task.task_id}`}>{task.title}</TextLink>
+          <div className="text-xs text-slate-500">
+            {label(task.task_type)} · due {formatDateTime(task.due_at)}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {(task.priority === 'high' || task.priority === 'urgent') && <StatusBadge value={task.priority} />}
+          <StatusBadge value={task.status} />
+        </div>
+      </div>
+      <div className="mt-1 text-xs text-slate-600">
+        Next action: <span className="font-medium">{task.next_action}</span>
+      </div>
+    </li>
+  )
+}
+
+function CallItem({ call }: { call: Call }) {
+  return (
+    <li className="py-3 first:pt-0 last:pb-0">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <TextLink to={`/calls/${call.call_id}`}>{call.purpose}</TextLink>
+          <div className="text-xs text-slate-500">
+            {formatDateTime(call.started_at ?? call.created_at)} · {label(call.workflow)}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <VoiceModeBadge isLive={call.is_live} />
+          <StatusBadge value={call.status} />
+          {call.outcome && <StatusBadge value={call.outcome} />}
+        </div>
+      </div>
+      {call.summary && <p className="mt-1 line-clamp-2 text-xs text-slate-600">{call.summary}</p>}
+    </li>
+  )
+}
+
+function EscalationItem({ esc }: { esc: Escalation }) {
+  return (
+    <li className="py-3 first:pt-0 last:pb-0">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <TextLink to={`/escalations/${esc.escalation_id}`}>{esc.reason}</TextLink>
+          <div className="text-xs text-slate-500">
+            {esc.routing_destination} · created {relativeTime(esc.created_at)}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <StatusBadge value={esc.priority} />
+          <StatusBadge value={esc.status} />
+        </div>
+      </div>
+    </li>
+  )
+}
+
+export default function PatientDetailPage() {
+  const { patientId = '' } = useParams()
+  const { data, error, loading, reload } = useAsync(() => api.getPatient(patientId), [patientId])
+
+  const gate = (
+    <LoadGate data={data} error={error} loading={loading} reload={reload} notFound={{ what: 'Patient', backTo: '/patients', backLabel: 'Back to patients' }} />
+  )
+  if (!data) {
+    return (
+      <div>
+        <BackLink to="/patients">Patients</BackLink>
+        {gate}
+      </div>
+    )
+  }
+
+  const { patient, appointments, tasks, calls, escalations, events } = data
+  const sortedAppts = [...appointments].sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
+  const openTasks = tasks
+    .filter((t) => !CLOSED_TASK_STATUSES.includes(t.status))
+    .sort((a, b) => comparePriority(a.priority, b.priority) || a.due_at.localeCompare(b.due_at))
+  const recentCalls = [...calls].sort((a, b) => (b.started_at ?? b.created_at).localeCompare(a.started_at ?? a.created_at))
+  const sortedEsc = [...escalations].sort(
+    (a, b) => Number(a.status === 'resolved') - Number(b.status === 'resolved') || b.created_at.localeCompare(a.created_at),
+  )
+
+  return (
+    <div>
+      <BackLink to="/patients">Patients</BackLink>
+      <PageHeader
+        title={patient.display_name}
+        subtitle={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            {patient.demo_id} <DemoBadge>Synthetic patient</DemoBadge>
+          </span>
+        }
+      />
+      <RefreshError error={error} reload={reload} />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Card title="Summary">
+            <PatientSummary patient={patient} />
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <DetailList
+                items={[
+                  { label: 'Call consent', value: patient.contact_permitted ? 'Permitted' : 'Not permitted' },
+                  { label: 'Contact', value: `${patient.phone_masked} (masked)` },
+                  { label: 'Preferred language', value: label(patient.language) },
+                  { label: 'Open follow-ups', value: openTasks.length },
+                ]}
+              />
+            </div>
+          </Card>
+
+          <Card title={`Appointments (${appointments.length})`}>
+            {sortedAppts.length === 0 ? (
+              <EmptyState title="No appointments on record" />
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {sortedAppts.map((a) => (
+                  <AppointmentItem key={a.appointment_id} appt={a} />
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card title={`Open tasks (${openTasks.length})`}>
+            {openTasks.length === 0 ? (
+              <EmptyState title="No open follow-ups" description="All tasks for this patient are completed or cancelled." />
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {openTasks.map((t) => (
+                  <TaskItem key={t.task_id} task={t} />
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card title={`Recent calls (${calls.length})`}>
+            {recentCalls.length === 0 ? (
+              <EmptyState title="No calls yet" />
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {recentCalls.map((c) => (
+                  <CallItem key={c.call_id} call={c} />
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card title={`Escalations (${escalations.length})`}>
+            {sortedEsc.length === 0 ? (
+              <EmptyState title="No escalations" />
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {sortedEsc.map((e) => (
+                  <EscalationItem key={e.escalation_id} esc={e} />
+                ))}
+              </ul>
+            )}
+          </Card>
+          <Card title="Activity">
+            <Timeline events={events} />
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}

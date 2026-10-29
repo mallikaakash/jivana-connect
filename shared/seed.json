@@ -1,0 +1,314 @@
+{
+  "_note": "Synthetic, fictitious demo data. See docs/CONTRACT.md for the rel:... timestamp format.",
+  "patients": [
+    { "patient_id": "patient_demo_001", "display_name": "Asha Verma", "demo_id": "JC-1001", "age": 58, "language": "hi", "contact_ref": "demo-contact-01", "phone_masked": "+91 98xxx xx101", "contact_permitted": true, "created_at": "rel:-40d@09:00" },
+    { "patient_id": "patient_demo_002", "display_name": "Rohan Mehta", "demo_id": "JC-1002", "age": 42, "language": "hinglish", "contact_ref": "demo-contact-02", "phone_masked": "+91 98xxx xx102", "contact_permitted": true, "created_at": "rel:-35d@09:00" },
+    { "patient_id": "patient_demo_003", "display_name": "Kavita Nair", "demo_id": "JC-1003", "age": 35, "language": "en", "contact_ref": "demo-contact-03", "phone_masked": "+91 98xxx xx103", "contact_permitted": true, "created_at": "rel:-30d@09:00" },
+    { "patient_id": "patient_demo_004", "display_name": "Suresh Iyer", "demo_id": "JC-1004", "age": 66, "language": "hi", "contact_ref": "demo-contact-04", "phone_masked": "+91 98xxx xx104", "contact_permitted": true, "created_at": "rel:-28d@09:00" },
+    { "patient_id": "patient_demo_005", "display_name": "Fatima Sheikh", "demo_id": "JC-1005", "age": 29, "language": "hinglish", "contact_ref": "demo-contact-05", "phone_masked": "+91 98xxx xx105", "contact_permitted": true, "created_at": "rel:-25d@09:00" },
+    { "patient_id": "patient_demo_006", "display_name": "Arjun Das", "demo_id": "JC-1006", "age": 51, "language": "hi", "contact_ref": "demo-contact-06", "phone_masked": "+91 98xxx xx106", "contact_permitted": true, "created_at": "rel:-20d@09:00" },
+    { "patient_id": "patient_demo_007", "display_name": "Meera Joshi", "demo_id": "JC-1007", "age": 47, "language": "en", "contact_ref": "demo-contact-07", "phone_masked": "+91 98xxx xx107", "contact_permitted": true, "created_at": "rel:-15d@09:00" },
+    { "patient_id": "patient_demo_008", "display_name": "Vikram Singh", "demo_id": "JC-1008", "age": 39, "language": "hinglish", "contact_ref": "demo-contact-08", "phone_masked": "+91 98xxx xx108", "contact_permitted": false, "created_at": "rel:-10d@09:00" }
+  ],
+  "appointments": [
+    { "appointment_id": "appt_demo_001", "patient_id": "patient_demo_001", "scheduled_at": "rel:1d@10:30", "department": "Cardiology", "clinician": "Dr. A. Rao", "booking_status": "scheduled", "confirmation_state": "pending", "task_id": "task_demo_001" },
+    { "appointment_id": "appt_demo_002", "patient_id": "patient_demo_002", "scheduled_at": "rel:2d@11:00", "department": "Orthopaedics", "clinician": "Dr. S. Kulkarni", "booking_status": "scheduled", "confirmation_state": "rescheduling_requested", "task_id": "task_demo_002" },
+    { "appointment_id": "appt_demo_003", "patient_id": "patient_demo_005", "scheduled_at": "rel:1d@15:00", "department": "Dermatology", "clinician": "Dr. N. Bose", "booking_status": "scheduled", "confirmation_state": "confirmed", "task_id": "task_demo_005" },
+    { "appointment_id": "appt_demo_004", "patient_id": "patient_demo_006", "scheduled_at": "rel:2d@09:30", "department": "General Medicine", "clinician": "Dr. P. Menon", "booking_status": "scheduled", "confirmation_state": "no_answer", "task_id": "task_demo_006" },
+    { "appointment_id": "appt_demo_005", "patient_id": "patient_demo_004", "scheduled_at": "rel:7d@10:00", "department": "Orthopaedics", "clinician": "Dr. S. Kulkarni", "booking_status": "scheduled", "confirmation_state": "pending", "task_id": null },
+    { "appointment_id": "appt_demo_006", "patient_id": "patient_demo_003", "scheduled_at": "rel:5d@12:00", "department": "Endocrinology", "clinician": "Dr. R. Shah", "booking_status": "scheduled", "confirmation_state": "pending", "task_id": null }
+  ],
+  "tasks": [
+    {
+      "task_id": "task_demo_001", "patient_id": "patient_demo_001", "appointment_id": "appt_demo_001",
+      "task_type": "appointment_confirmation", "title": "Confirm cardiology appointment",
+      "purpose": "Confirm tomorrow's cardiology appointment with Dr. A. Rao at 10:30 AM.",
+      "call_context": "Patient has a cardiology appointment tomorrow at 10:30 AM with Dr. A. Rao. Ask whether they can attend. If not, note that they want to reschedule and their preferred time. Do not book a new slot.",
+      "department": "Cardiology", "due_at": "rel:45m", "status": "pending", "priority": "normal",
+      "attempt_count": 0, "last_attempt_at": null, "next_action": "Start confirmation call",
+      "latest_outcome": null, "extracted_fields": null, "test_tracking": null, "callback_window": null, "escalation_id": null,
+      "created_at": "rel:-2d@09:00", "updated_at": "rel:-2d@09:00",
+      "demo_outcome": "rescheduling_requested",
+      "demo_extracted_fields": { "appointment_outcome": "rescheduling_requested", "preferred_reschedule_window": "Day after tomorrow, after 4 PM", "patient_note": "Has a family function tomorrow morning", "callback_requested": false, "callback_window": null }
+    },
+    {
+      "task_id": "task_demo_002", "patient_id": "patient_demo_002", "appointment_id": "appt_demo_002",
+      "task_type": "appointment_confirmation", "title": "Confirm orthopaedics appointment",
+      "purpose": "Confirm the orthopaedics appointment with Dr. S. Kulkarni.",
+      "call_context": "Patient has an orthopaedics appointment in 2 days at 11:00 AM. Ask whether they can attend.",
+      "department": "Orthopaedics", "due_at": "rel:-1d@10:00", "status": "awaiting_staff_action", "priority": "high",
+      "attempt_count": 1, "last_attempt_at": "rel:-1d@10:04",
+      "next_action": "Call patient to offer a new slot (prefers weekday mornings next week)",
+      "latest_outcome": "rescheduling_requested",
+      "extracted_fields": { "appointment_outcome": "rescheduling_requested", "preferred_reschedule_window": "Weekday mornings next week", "patient_note": "Travelling for work this week", "callback_requested": false, "callback_window": null },
+      "test_tracking": null, "callback_window": null, "escalation_id": null,
+      "created_at": "rel:-3d@09:00", "updated_at": "rel:-1d@10:06"
+    },
+    {
+      "task_id": "task_demo_003", "patient_id": "patient_demo_003", "appointment_id": null,
+      "task_type": "test_report_reminder", "title": "HbA1c test reminder",
+      "purpose": "Remind patient to complete the HbA1c blood test before the endocrinology review.",
+      "call_context": "Patient was asked to get an HbA1c blood test done before their endocrinology visit. Ask whether the test has been done and when. Do not discuss or interpret results.",
+      "department": "Endocrinology", "due_at": "rel:-1d@12:00", "status": "awaiting_staff_action", "priority": "normal",
+      "attempt_count": 1, "last_attempt_at": "rel:-1d@12:05",
+      "next_action": "Check lab portal for HbA1c report",
+      "latest_outcome": "test_completion_reported",
+      "extracted_fields": { "test_completed": true, "test_date": "2 days ago", "patient_note": "Went to the lab near her home", "callback_requested": false, "callback_window": null },
+      "test_tracking": { "test_name": "HbA1c", "test_completion_reported": true, "report_received": false, "clinician_reviewed": false },
+      "callback_window": null, "escalation_id": null,
+      "created_at": "rel:-6d@09:00", "updated_at": "rel:-1d@12:07"
+    },
+    {
+      "task_id": "task_demo_004", "patient_id": "patient_demo_004", "appointment_id": null,
+      "task_type": "post_procedure_checkin", "title": "Post-procedure check-in (day 3)",
+      "purpose": "Routine day-3 check-in after knee arthroscopy.",
+      "call_context": "Patient had a knee arthroscopy 3 days ago. Ask the approved check-in questions about how they are feeling and whether they have any concerns. Do not give medical advice; route any concern to the nurse desk.",
+      "department": "Orthopaedics", "due_at": "rel:-95m", "status": "awaiting_staff_action", "priority": "high",
+      "attempt_count": 1, "last_attempt_at": "rel:-91m",
+      "next_action": "Review escalated concern",
+      "latest_outcome": "concern_reported",
+      "extracted_fields": { "checkin_result": "concern_reported", "concern_summary": "Patient reports the swelling around the knee has increased since yesterday evening.", "callback_requested": false, "callback_window": null },
+      "test_tracking": null, "callback_window": null, "escalation_id": "esc_demo_001",
+      "created_at": "rel:-3d@17:00", "updated_at": "rel:-89m"
+    },
+    {
+      "task_id": "task_demo_005", "patient_id": "patient_demo_005", "appointment_id": "appt_demo_003",
+      "task_type": "appointment_confirmation", "title": "Confirm dermatology appointment",
+      "purpose": "Confirm tomorrow's dermatology appointment with Dr. N. Bose at 3:00 PM.",
+      "call_context": "Patient has a dermatology appointment tomorrow at 3:00 PM. Ask whether they can attend.",
+      "department": "Dermatology", "due_at": "rel:-180m", "status": "completed", "priority": "normal",
+      "attempt_count": 1, "last_attempt_at": "rel:-178m", "next_action": "No action needed",
+      "latest_outcome": "confirmed",
+      "extracted_fields": { "appointment_outcome": "confirmed", "preferred_reschedule_window": null, "patient_note": null, "callback_requested": false, "callback_window": null },
+      "test_tracking": null, "callback_window": null, "escalation_id": null,
+      "created_at": "rel:-2d@09:00", "updated_at": "rel:-176m"
+    },
+    {
+      "task_id": "task_demo_006", "patient_id": "patient_demo_006", "appointment_id": "appt_demo_004",
+      "task_type": "appointment_confirmation", "title": "Confirm general medicine appointment",
+      "purpose": "Confirm the general medicine appointment with Dr. P. Menon.",
+      "call_context": "Patient has a general medicine appointment in 2 days at 9:30 AM. Ask whether they can attend.",
+      "department": "General Medicine", "due_at": "rel:-1d@11:00", "status": "due", "priority": "normal",
+      "attempt_count": 2, "last_attempt_at": "rel:-1d@11:02", "next_action": "Retry confirmation call",
+      "latest_outcome": "no_answer", "extracted_fields": null, "test_tracking": null, "callback_window": null, "escalation_id": null,
+      "created_at": "rel:-4d@09:00", "updated_at": "rel:-1d@11:03",
+      "demo_outcome": "confirmed",
+      "demo_extracted_fields": { "appointment_outcome": "confirmed", "preferred_reschedule_window": null, "patient_note": null, "callback_requested": false, "callback_window": null }
+    },
+    {
+      "task_id": "task_demo_007", "patient_id": "patient_demo_007", "appointment_id": null,
+      "task_type": "callback_request", "title": "Patient callback request",
+      "purpose": "Patient asked the clinic to call back about the BP log reminder.",
+      "call_context": "Patient requested a callback. Scheduler should call in the requested window.",
+      "department": "General Medicine", "due_at": "rel:1d@16:00", "status": "pending", "priority": "normal",
+      "attempt_count": 0, "last_attempt_at": null, "next_action": "Scheduler to call back tomorrow, 4–6 PM",
+      "latest_outcome": null, "extracted_fields": null, "test_tracking": null, "callback_window": "Tomorrow, 4–6 PM", "escalation_id": null,
+      "created_at": "rel:-1d@15:20", "updated_at": "rel:-1d@15:20"
+    },
+    {
+      "task_id": "task_demo_008", "patient_id": "patient_demo_007", "appointment_id": null,
+      "task_type": "clinician_task_reminder", "title": "Share home BP log with Dr. Menon",
+      "purpose": "Remind patient to share one week of home blood-pressure readings, as assigned by Dr. P. Menon.",
+      "call_context": "Dr. P. Menon asked the patient to record home BP readings for 7 days and share them with the clinic. Remind them using the approved wording. Do not comment on the readings.",
+      "department": "General Medicine", "due_at": "rel:240m", "status": "pending", "priority": "low",
+      "attempt_count": 0, "last_attempt_at": null, "next_action": "Start reminder call",
+      "latest_outcome": null, "extracted_fields": null, "test_tracking": null, "callback_window": null, "escalation_id": null,
+      "created_at": "rel:-5d@11:00", "updated_at": "rel:-5d@11:00",
+      "demo_outcome": "task_acknowledged",
+      "demo_extracted_fields": { "task_acknowledged": true, "patient_note": "Will send the readings on WhatsApp tonight", "callback_requested": false, "callback_window": null }
+    },
+    {
+      "task_id": "task_demo_009", "patient_id": "patient_demo_008", "appointment_id": null,
+      "task_type": "test_report_reminder", "title": "Lipid profile test reminder",
+      "purpose": "Remind patient to complete a fasting lipid profile before the follow-up visit.",
+      "call_context": "Patient was asked to get a fasting lipid profile done. Ask whether it has been done. Do not discuss results.",
+      "department": "General Medicine", "due_at": "rel:-30m", "status": "due", "priority": "normal",
+      "attempt_count": 0, "last_attempt_at": null, "next_action": "Obtain call consent before reminding",
+      "latest_outcome": null, "extracted_fields": null,
+      "test_tracking": { "test_name": "Lipid profile", "test_completion_reported": false, "report_received": false, "clinician_reviewed": false },
+      "callback_window": null, "escalation_id": null,
+      "created_at": "rel:-3d@10:00", "updated_at": "rel:-3d@10:00"
+    },
+    {
+      "task_id": "task_demo_010", "patient_id": "patient_demo_008", "appointment_id": null,
+      "task_type": "post_procedure_checkin", "title": "Post-consultation check-in",
+      "purpose": "Routine check-in two days after a general medicine consultation.",
+      "call_context": "Patient had a consultation 2 days ago and started a new prescription. Ask the approved check-in questions. Do not advise on medication; route questions to the doctor desk.",
+      "department": "General Medicine", "due_at": "rel:-1d@15:00", "status": "awaiting_staff_action", "priority": "normal",
+      "attempt_count": 1, "last_attempt_at": "rel:-1d@15:03", "next_action": "Doctor desk to answer patient's medication-timing question",
+      "latest_outcome": "concern_reported",
+      "extracted_fields": { "checkin_result": "concern_reported", "concern_summary": "Patient asked whether the new tablet should be taken before or after food.", "callback_requested": false, "callback_window": null },
+      "test_tracking": null, "callback_window": null, "escalation_id": "esc_demo_002",
+      "created_at": "rel:-2d@18:00", "updated_at": "rel:-1d@15:05"
+    },
+    {
+      "task_id": "task_demo_011", "patient_id": "patient_demo_001", "appointment_id": null,
+      "task_type": "test_report_reminder", "title": "Lipid profile before cardiology review",
+      "purpose": "Remind patient to complete a fasting lipid profile before the cardiology follow-up.",
+      "call_context": "Patient was asked to get a fasting lipid profile done. Ask whether it has been done. Do not discuss results.",
+      "department": "Cardiology", "due_at": "rel:3d@10:00", "status": "pending", "priority": "low",
+      "attempt_count": 0, "last_attempt_at": null, "next_action": "Start reminder call",
+      "latest_outcome": null, "extracted_fields": null,
+      "test_tracking": { "test_name": "Lipid profile", "test_completion_reported": false, "report_received": false, "clinician_reviewed": false },
+      "callback_window": null, "escalation_id": null,
+      "created_at": "rel:-2d@09:00", "updated_at": "rel:-2d@09:00",
+      "demo_outcome": "test_completion_reported",
+      "demo_extracted_fields": { "test_completed": true, "test_date": "Yesterday", "patient_note": null, "callback_requested": false, "callback_window": null }
+    },
+    {
+      "task_id": "task_demo_012", "patient_id": "patient_demo_005", "appointment_id": null,
+      "task_type": "clinician_task_reminder", "title": "Bring previous prescriptions",
+      "purpose": "Remind patient to bring previous prescriptions to the dermatology visit, as requested by Dr. N. Bose.",
+      "call_context": "Remind patient to bring previous prescriptions to the appointment.",
+      "department": "Dermatology", "due_at": "rel:-180m", "status": "completed", "priority": "low",
+      "attempt_count": 1, "last_attempt_at": "rel:-178m", "next_action": "No action needed",
+      "latest_outcome": "task_acknowledged",
+      "extracted_fields": { "task_acknowledged": true, "patient_note": null, "callback_requested": false, "callback_window": null },
+      "test_tracking": null, "callback_window": null, "escalation_id": null,
+      "created_at": "rel:-2d@09:00", "updated_at": "rel:-176m"
+    }
+  ],
+  "calls": [
+    {
+      "call_id": "call_demo_001", "task_id": "task_demo_002", "patient_id": "patient_demo_002", "provider_call_id": null,
+      "workflow": "appointment_confirmation", "purpose": "Confirm orthopaedics appointment",
+      "status": "completed", "outcome": "rescheduling_requested",
+      "summary": "Patient cannot attend because of work travel this week and asked to reschedule to a weekday morning next week. No new slot was booked.",
+      "transcript": [
+        { "role": "agent", "text": "Namaste, main Jiya bol rahi hoon, Jivana clinic se. Kya meri baat Rohan Mehta ji se ho rahi hai?" },
+        { "role": "patient", "text": "Haan, bol raha hoon." },
+        { "role": "agent", "text": "Aapka Dr. Kulkarni ke saath orthopaedics appointment parso subah 11 baje hai. Kya aap aa payenge?" },
+        { "role": "patient", "text": "Is week main travel kar raha hoon, next week ho sakta hai? Morning mein." },
+        { "role": "agent", "text": "Theek hai, main note kar leti hoon ki aap next week weekday morning mein reschedule karna chahte hain. Clinic ki team aapko naya slot confirm karne ke liye call karegi." },
+        { "role": "patient", "text": "Thank you." }
+      ],
+      "transcript_is_example": true,
+      "extracted_fields": { "appointment_outcome": "rescheduling_requested", "preferred_reschedule_window": "Weekday mornings next week", "patient_note": "Travelling for work this week", "callback_requested": false, "callback_window": null },
+      "processing_result": "Outcome validated. Task moved to awaiting_staff_action. Appointment booking unchanged until staff rebook.",
+      "is_live": false, "escalation_id": null,
+      "started_at": "rel:-1d@10:02", "completed_at": "rel:-1d@10:05", "created_at": "rel:-1d@10:02"
+    },
+    {
+      "call_id": "call_demo_002", "task_id": "task_demo_005", "patient_id": "patient_demo_005", "provider_call_id": null,
+      "workflow": "appointment_confirmation", "purpose": "Confirm dermatology appointment",
+      "status": "completed", "outcome": "confirmed",
+      "summary": "Patient confirmed they will attend tomorrow's dermatology appointment and will bring previous prescriptions.",
+      "transcript": [
+        { "role": "agent", "text": "Hello, this is Jiya calling from Jivana clinic. Am I speaking with Fatima Sheikh?" },
+        { "role": "patient", "text": "Yes, speaking." },
+        { "role": "agent", "text": "You have a dermatology appointment with Dr. Bose tomorrow at 3 PM. Will you be able to attend?" },
+        { "role": "patient", "text": "Yes, I'll be there." },
+        { "role": "agent", "text": "Thank you. Dr. Bose has also asked that you bring your previous prescriptions." },
+        { "role": "patient", "text": "Sure, I will." }
+      ],
+      "transcript_is_example": true,
+      "extracted_fields": { "appointment_outcome": "confirmed", "preferred_reschedule_window": null, "patient_note": null, "callback_requested": false, "callback_window": null },
+      "processing_result": "Outcome validated. Task completed. Appointment confirmation recorded.",
+      "is_live": false, "escalation_id": null,
+      "started_at": "rel:-179m", "completed_at": "rel:-177m", "created_at": "rel:-179m"
+    },
+    {
+      "call_id": "call_demo_003", "task_id": "task_demo_006", "patient_id": "patient_demo_006", "provider_call_id": null,
+      "workflow": "appointment_confirmation", "purpose": "Confirm general medicine appointment",
+      "status": "no_answer", "outcome": null, "summary": null, "transcript": null, "transcript_is_example": false,
+      "extracted_fields": null,
+      "processing_result": "No answer. Attempt 1 of 3 recorded; retry scheduled.",
+      "is_live": false, "escalation_id": null,
+      "started_at": "rel:-2d@16:00", "completed_at": "rel:-2d@16:01", "created_at": "rel:-2d@16:00"
+    },
+    {
+      "call_id": "call_demo_004", "task_id": "task_demo_006", "patient_id": "patient_demo_006", "provider_call_id": null,
+      "workflow": "appointment_confirmation", "purpose": "Confirm general medicine appointment",
+      "status": "no_answer", "outcome": null, "summary": null, "transcript": null, "transcript_is_example": false,
+      "extracted_fields": null,
+      "processing_result": "No answer. Attempt 2 of 3 recorded; task due for retry.",
+      "is_live": false, "escalation_id": null,
+      "started_at": "rel:-1d@11:01", "completed_at": "rel:-1d@11:02", "created_at": "rel:-1d@11:01"
+    },
+    {
+      "call_id": "call_demo_005", "task_id": "task_demo_003", "patient_id": "patient_demo_003", "provider_call_id": null,
+      "workflow": "test_report_reminder", "purpose": "HbA1c test reminder",
+      "status": "completed", "outcome": "test_completion_reported",
+      "summary": "Patient says the HbA1c test was done 2 days ago at a lab near her home. The clinic has not yet received the report.",
+      "transcript": [
+        { "role": "agent", "text": "Hello, this is Jiya from Jivana clinic. I'm calling about the HbA1c blood test Dr. Shah asked for. Have you been able to get it done?" },
+        { "role": "patient", "text": "Yes, I did it two days ago at the lab near my place." },
+        { "role": "agent", "text": "Thank you, I've noted that. The clinic team will check for the report. Is there anything else you'd like me to pass on?" },
+        { "role": "patient", "text": "No, that's all." }
+      ],
+      "transcript_is_example": true,
+      "extracted_fields": { "test_completed": true, "test_date": "2 days ago", "patient_note": "Went to the lab near her home", "callback_requested": false, "callback_window": null },
+      "processing_result": "Test completion reported by patient. Report not yet received; clinician review pending. Task moved to awaiting_staff_action.",
+      "is_live": false, "escalation_id": null,
+      "started_at": "rel:-1d@12:03", "completed_at": "rel:-1d@12:06", "created_at": "rel:-1d@12:03"
+    },
+    {
+      "call_id": "call_demo_006", "task_id": "task_demo_004", "patient_id": "patient_demo_004", "provider_call_id": null,
+      "workflow": "post_procedure_checkin", "purpose": "Post-procedure check-in (day 3)",
+      "status": "completed", "outcome": "concern_reported",
+      "summary": "Patient reported that swelling around the knee has increased since yesterday evening. Jiya did not give advice and told the patient the nurse desk will call back. Escalation created.",
+      "transcript": [
+        { "role": "agent", "text": "Namaste Suresh ji, main Jiya, Jivana clinic se. Aapke knee procedure ke baad routine check-in ke liye call kiya hai. Aap kaisa mehsoos kar rahe hain?" },
+        { "role": "patient", "text": "Kal shaam se ghutne ke aas-paas sujan thodi badh gayi hai." },
+        { "role": "agent", "text": "Bataane ke liye dhanyavaad. Main yeh baat abhi nurse desk tak pahuncha rahi hoon, woh aapko jaldi call karenge. Agar takleef bahut zyada badh jaaye, toh turant clinic ya emergency se sampark karein." },
+        { "role": "patient", "text": "Theek hai." }
+      ],
+      "transcript_is_example": true,
+      "extracted_fields": { "checkin_result": "concern_reported", "concern_summary": "Patient reports the swelling around the knee has increased since yesterday evening.", "callback_requested": false, "callback_window": null },
+      "processing_result": "Concern matched approved escalation rule. Escalation esc_demo_001 created and routed to Orthopaedics nurse desk.",
+      "is_live": false, "escalation_id": "esc_demo_001",
+      "started_at": "rel:-94m", "completed_at": "rel:-90m", "created_at": "rel:-94m"
+    },
+    {
+      "call_id": "call_demo_007", "task_id": "task_demo_010", "patient_id": "patient_demo_008", "provider_call_id": null,
+      "workflow": "post_procedure_checkin", "purpose": "Post-consultation check-in",
+      "status": "completed", "outcome": "concern_reported",
+      "summary": "Patient asked whether the new tablet should be taken before or after food. Jiya did not answer the medication question and routed it to the doctor desk.",
+      "transcript": [
+        { "role": "agent", "text": "Hi Vikram ji, Jiya here from Jivana clinic, just a routine check-in after your visit. How are you doing?" },
+        { "role": "patient", "text": "Theek hoon. Bas ek doubt tha, nayi tablet khaane se pehle leni hai ya baad mein?" },
+        { "role": "agent", "text": "Achha sawaal hai. Main dawai ke baare mein salah nahi de sakti, lekin main yeh sawaal doctor desk ko bhej rahi hoon. Woh aapko jawab denge." },
+        { "role": "patient", "text": "Okay, thanks." }
+      ],
+      "transcript_is_example": true,
+      "extracted_fields": { "checkin_result": "concern_reported", "concern_summary": "Patient asked whether the new tablet should be taken before or after food.", "callback_requested": false, "callback_window": null },
+      "processing_result": "Medication question routed to doctor desk per approved rule. Escalation esc_demo_002 created.",
+      "is_live": false, "escalation_id": "esc_demo_002",
+      "started_at": "rel:-1d@15:01", "completed_at": "rel:-1d@15:04", "created_at": "rel:-1d@15:01"
+    }
+  ],
+  "escalations": [
+    {
+      "escalation_id": "esc_demo_001", "patient_id": "patient_demo_004", "call_id": "call_demo_006", "task_id": "task_demo_004",
+      "reason": "Patient-reported concern after procedure",
+      "concern_summary": "Patient reports the swelling around the knee has increased since yesterday evening.",
+      "priority": "high", "status": "open", "routing_destination": "Orthopaedics nurse desk", "assigned_to": null,
+      "notes": [], "created_at": "rel:-89m", "updated_at": "rel:-89m"
+    },
+    {
+      "escalation_id": "esc_demo_002", "patient_id": "patient_demo_008", "call_id": "call_demo_007", "task_id": "task_demo_010",
+      "reason": "Medication question needs clinician response",
+      "concern_summary": "Patient asked whether the new tablet should be taken before or after food.",
+      "priority": "normal", "status": "acknowledged", "routing_destination": "General Medicine doctor desk", "assigned_to": null,
+      "notes": [ { "note_id": "note_demo_001", "text": "Seen. Will check prescription and call back.", "author": "Nurse Priya (demo)", "created_at": "rel:-1d@16:10" } ],
+      "created_at": "rel:-1d@15:05", "updated_at": "rel:-1d@16:10"
+    }
+  ],
+  "events": [
+    { "event_id": "evt_demo_001", "entity_type": "call", "entity_id": "call_demo_003", "patient_id": "patient_demo_006", "event_type": "call_no_answer", "message": "No answer — attempt 1 of 3", "actor": "jiya", "timestamp": "rel:-2d@16:01" },
+    { "event_id": "evt_demo_002", "entity_type": "call", "entity_id": "call_demo_001", "patient_id": "patient_demo_002", "event_type": "call_completed", "message": "Call completed", "actor": "jiya", "timestamp": "rel:-1d@10:05" },
+    { "event_id": "evt_demo_003", "entity_type": "task", "entity_id": "task_demo_002", "patient_id": "patient_demo_002", "event_type": "outcome_extracted", "message": "Rescheduling requested — prefers weekday mornings next week", "actor": "system", "timestamp": "rel:-1d@10:06" },
+    { "event_id": "evt_demo_004", "entity_type": "task", "entity_id": "task_demo_002", "patient_id": "patient_demo_002", "event_type": "task_status_changed", "message": "Task moved to Awaiting staff action", "actor": "system", "timestamp": "rel:-1d@10:06" },
+    { "event_id": "evt_demo_005", "entity_type": "call", "entity_id": "call_demo_004", "patient_id": "patient_demo_006", "event_type": "call_no_answer", "message": "No answer — attempt 2 of 3", "actor": "jiya", "timestamp": "rel:-1d@11:02" },
+    { "event_id": "evt_demo_006", "entity_type": "call", "entity_id": "call_demo_005", "patient_id": "patient_demo_003", "event_type": "call_completed", "message": "Call completed — patient reports HbA1c test done", "actor": "jiya", "timestamp": "rel:-1d@12:06" },
+    { "event_id": "evt_demo_007", "entity_type": "task", "entity_id": "task_demo_003", "patient_id": "patient_demo_003", "event_type": "task_status_changed", "message": "Awaiting staff action — report not yet received", "actor": "system", "timestamp": "rel:-1d@12:07" },
+    { "event_id": "evt_demo_008", "entity_type": "call", "entity_id": "call_demo_007", "patient_id": "patient_demo_008", "event_type": "call_completed", "message": "Call completed — medication question raised", "actor": "jiya", "timestamp": "rel:-1d@15:04" },
+    { "event_id": "evt_demo_009", "entity_type": "escalation", "entity_id": "esc_demo_002", "patient_id": "patient_demo_008", "event_type": "escalation_created", "message": "Escalation created — routed to General Medicine doctor desk", "actor": "system", "timestamp": "rel:-1d@15:05" },
+    { "event_id": "evt_demo_010", "entity_type": "task", "entity_id": "task_demo_007", "patient_id": "patient_demo_007", "event_type": "callback_task_created", "message": "Callback requested for tomorrow, 4–6 PM", "actor": "system", "timestamp": "rel:-1d@15:20" },
+    { "event_id": "evt_demo_011", "entity_type": "escalation", "entity_id": "esc_demo_002", "patient_id": "patient_demo_008", "event_type": "staff_action_recorded", "message": "Acknowledged by Nurse Priya (demo)", "actor": "staff", "timestamp": "rel:-1d@16:10" },
+    { "event_id": "evt_demo_012", "entity_type": "call", "entity_id": "call_demo_002", "patient_id": "patient_demo_005", "event_type": "call_completed", "message": "Call completed — appointment confirmed", "actor": "jiya", "timestamp": "rel:-177m" },
+    { "event_id": "evt_demo_013", "entity_type": "task", "entity_id": "task_demo_005", "patient_id": "patient_demo_005", "event_type": "task_status_changed", "message": "Task completed", "actor": "system", "timestamp": "rel:-176m" },
+    { "event_id": "evt_demo_014", "entity_type": "call", "entity_id": "call_demo_006", "patient_id": "patient_demo_004", "event_type": "call_completed", "message": "Call completed — patient reported a concern", "actor": "jiya", "timestamp": "rel:-90m" },
+    { "event_id": "evt_demo_015", "entity_type": "escalation", "entity_id": "esc_demo_001", "patient_id": "patient_demo_004", "event_type": "escalation_created", "message": "Escalation created — routed to Orthopaedics nurse desk", "actor": "system", "timestamp": "rel:-89m" }
+  ]
+}

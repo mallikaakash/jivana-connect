@@ -2,3 +2,10 @@
 node_modules/
 .cursor/runs/
 docs/SPEC.md
+dist/
+frontend/.env.local
+backend/.env
+backend/.venv/
+__pycache__/
+.pytest_cache/
+*.tsbuildinfo
