@@ -424,11 +424,13 @@ function completeSimulatedCall(call: Call, atMs: number) {
       }
     } else if (outcome === 'test_completion_reported') {
       const test = t.test_tracking?.test_name ?? 'test'
-      if (t.test_tracking) t.test_tracking.test_completion_reported = true // report_received / clinician_reviewed untouched
+      const sched = str(fields.callback_window)
+      if (t.test_tracking) t.test_tracking.test_completion_reported = true
       t.status = 'awaiting_staff_action'
-      t.next_action = `Check lab for ${test} report`
-      call.summary = `Patient says the ${test} test has been done${str(fields.test_date) ? ` (${lcFirst(String(fields.test_date))})` : ''}. The clinic has not yet received the report.`
-      call.processing_result = 'Test completion reported by patient. Report not yet received; clinician review pending. Task moved to awaiting_staff_action.'
+      if (sched) t.callback_window = sched
+      t.next_action = sched ? `Book follow-up visit — ${sched}` : 'Book follow-up visit (preference captured on call)'
+      call.summary = `Patient says the ${test} test has been done${str(fields.test_date) ? ` (${lcFirst(String(fields.test_date))})` : ''}.${sched ? ` Prefers follow-up around ${lcFirst(sched)}.` : ' Front desk will book a follow-up visit.'}`
+      call.processing_result = 'Test completed on call; follow-up preference captured on the same call (no second Jiya call).'
       outcomeMsg = `Patient reports ${test} test done`
     } else if (outcome === 'test_not_done') {
       const test = t.test_tracking?.test_name ?? 'test'
@@ -691,15 +693,31 @@ export const mockApi: JivanaApi = {
     latency(() => {
       const now = Date.now()
       const f = filters ?? {}
+      const endOfToday = istDayStart(now, 1)
+      const inboxIds =
+        f.queue === 'operations' || f.queue === 'clinical'
+          ? new Set(needsAttention(now).filter((i) => i.audience === f.queue).map((i) => i.task_id))
+          : null
       const items = state.tasks
-        .filter(
-          (t) =>
-            (!f.status || t.status === f.status) &&
-            (!f.task_type || t.task_type === f.task_type) &&
-            (!f.priority || t.priority === f.priority) &&
-            (!f.patient_id || t.patient_id === f.patient_id) &&
-            matchesDue(t, f.due, now),
-        )
+        .filter((t) => {
+          if (f.status && t.status !== f.status) return false
+          if (f.task_type && t.task_type !== f.task_type) return false
+          if (f.priority && t.priority !== f.priority) return false
+          if (f.patient_id && t.patient_id !== f.patient_id) return false
+          if (!matchesDue(t, f.due, now)) return false
+          if (f.queue === 'followups_due') {
+            if (t.status !== 'pending' && t.status !== 'due') return false
+            if (ms(t.due_at) >= endOfToday) return false
+          }
+          if (f.queue === 'open') {
+            if (TERMINAL_TASK.includes(t.status)) return false
+          }
+          if (f.queue === 'history') {
+            if (t.status !== 'completed' && t.status !== 'cancelled') return false
+          }
+          if (inboxIds && !inboxIds.has(t.task_id)) return false
+          return true
+        })
         .sort((a, b) => ms(a.due_at) - ms(b.due_at))
         .map((t) => withName(toTask(t)))
       return { items }

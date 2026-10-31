@@ -65,6 +65,7 @@ class CreatePatientBody(BaseModel):
     contact_permitted: bool = True
     chart_number: Optional[str] = None
     age: Optional[int] = None
+    gender: Optional[Literal["female", "male", "other", "prefer_not_to_say"]] = None
 
 
 class UpdatePatientBody(BaseModel):
@@ -74,6 +75,7 @@ class UpdatePatientBody(BaseModel):
     contact_permitted: Optional[bool] = None
     chart_number: Optional[str] = None
     age: Optional[int] = None
+    gender: Optional[Literal["female", "male", "other", "prefer_not_to_say"]] = None
 
 
 class UpdateAppointmentBody(BaseModel):
@@ -154,6 +156,7 @@ def create_patient(request: Request, body: CreatePatientBody, _: None = ClinicWr
         body.contact_permitted,
         body.chart_number,
         body.age,
+        body.gender,
     )
 
 
@@ -196,9 +199,16 @@ def list_tasks(
     priority: Optional[Priority | Literal[""]] = None,
     patient_id: Optional[str] = None,
     due: Optional[Literal["overdue", "today", "upcoming", ""]] = None,
+    queue: Optional[Literal["operations", "clinical", "followups_due", "open", "history", ""]] = None,
 ):
-    return {"items": svc(request).list_tasks(_blank(status), _blank(task_type), _blank(priority),
-                                             _blank(patient_id), _blank(due))}
+    return {"items": svc(request).list_tasks(
+        _blank(status),
+        _blank(task_type),
+        _blank(priority),
+        _blank(patient_id),
+        _blank(due),
+        _blank(queue),
+    )}
 
 
 @router.get("/tasks/{task_id}")

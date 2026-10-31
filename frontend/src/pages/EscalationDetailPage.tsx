@@ -17,7 +17,7 @@ export default function EscalationDetailPage() {
   const [staffRole] = useStaffRole()
   const meta = useAsync(() => api.getMeta(), [])
   const isDoctorClinic = APP_MODE === 'clinic' && staffRole === 'doctor'
-  const staffAuthor = staffDisplayName(meta.data?.clinical_lead_label)
+  const staffAuthor = staffDisplayName(meta.data?.clinical_lead_label, staffRole)
   const { data, error, loading, reload } = useAsync(() => api.getEscalation(escalationId), [escalationId])
   // Escalation as returned by the latest PATCH response. It applies only to the detail payload it was made against,
   // so once the follow-up refetch (with fresh events) lands, that newer payload wins.

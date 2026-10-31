@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react'
+import clsx from 'clsx'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, APP_MODE, ApiError, type Appointment, type WithPatientName } from '@/api'
@@ -8,11 +8,16 @@ import { Button } from '@/components/ui'
 import { DataTable, type Column } from '@/components/DataTable'
 import { Card, DemoBadge, PageHeader, StatusBadge } from '@/components/ui'
 import { appointmentNextStep } from '@/features/secondary/appointmentNextStep'
+import { CLINIC_HELP } from '@/features/clinic/helpCopy'
 import { LoadGate, RefreshError, TextLink } from '@/features/secondary/common'
-import { formatTime, label } from '@/lib/format'
+import { bookingStatusLabel, confirmationStateLabel, formatTime, isReplacedVisit } from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
 
 type Row = WithPatientName<Appointment>
+
+function isMutedAppointment(a: Pick<Appointment, 'booking_status'>) {
+  return a.booking_status === 'cancelled'
+}
 
 const TZ = 'Asia/Kolkata'
 
@@ -34,24 +39,75 @@ const columns: Column<Row>[] = [
     key: 'time',
     header: 'Time',
     className: 'whitespace-nowrap',
-    render: (a) => <span className="font-medium text-navy-800">{formatTime(a.scheduled_at)}</span>,
+    sortValue: (a) => a.scheduled_at,
+    render: (a) => (
+      <span className={a.booking_status === 'cancelled' ? 'font-normal text-slate-400' : 'font-medium text-navy-800'}>
+        {formatTime(a.scheduled_at)}
+      </span>
+    ),
   },
-  { key: 'patient', header: 'Patient', render: (a) => <TextLink to={`/patients/${a.patient_id}`}>{a.patient_name}</TextLink> },
+  {
+    key: 'patient',
+    header: 'Patient',
+    sortValue: (a) => a.patient_name,
+    render: (a) => (
+      <TextLink
+        to={`/patients/${a.patient_id}`}
+        className={a.booking_status === 'cancelled' ? '!text-slate-400 hover:!text-slate-500' : undefined}
+      >
+        {a.patient_name}
+      </TextLink>
+    ),
+  },
   {
     key: 'dept',
     header: 'Department / clinician',
-    render: (a) => (
-      <div>
-        <div>{a.department}</div>
-        <div className="text-xs text-slate-500">{a.clinician}</div>
-      </div>
-    ),
+    sortValue: (a) => `${a.department} ${a.clinician}`,
+    render: (a) => {
+      const muted = isMutedAppointment(a)
+      return (
+        <div className={muted ? 'text-slate-400' : undefined}>
+          <div className={muted ? 'font-normal' : undefined}>{a.department}</div>
+          <div className={clsx('text-xs', muted ? 'text-slate-400/90' : 'text-slate-500')}>{a.clinician}</div>
+        </div>
+      )
+    },
   },
-  { key: 'booking', header: 'Booking status', render: (a) => <StatusBadge value={a.booking_status} /> },
-  { key: 'confirmation', header: 'Confirmation', render: (a) => <StatusBadge value={a.confirmation_state} /> },
+  {
+    key: 'booking',
+    header: 'Booking status',
+    sortValue: (a) => a.booking_status,
+    render: (a) => {
+      const muted = isMutedAppointment(a)
+      return (
+        <StatusBadge
+          value={a.booking_status}
+          text={bookingStatusLabel(a.booking_status, a.confirmation_state)}
+          tone={muted ? 'red' : undefined}
+          className={muted ? 'opacity-90' : undefined}
+        />
+      )
+    },
+  },
+  {
+    key: 'confirmation',
+    header: 'Confirmation',
+    sortValue: (a) => a.confirmation_state,
+    render: (a) =>
+      isReplacedVisit(a) ? (
+        <span className="text-xs text-slate-400">—</span>
+      ) : (
+        <StatusBadge
+          value={a.confirmation_state}
+          text={confirmationStateLabel(a.confirmation_state)}
+          tone={a.booking_status === 'cancelled' ? 'grey' : undefined}
+        />
+      ),
+  },
   {
     key: 'requested',
     header: 'Requested slot (not booked)',
+    sortValue: (a) => a.requested_slot ?? '',
     render: (a) =>
       a.requested_slot ? (
         <div className="max-w-[12rem] text-xs">
@@ -69,9 +125,17 @@ const columns: Column<Row>[] = [
   {
     key: 'note',
     header: 'Call note',
+    sortValue: (a) => a.confirmation_note ?? '',
     render: (a) =>
       a.confirmation_note ? (
-        <span className="max-w-[14rem] text-xs text-slate-700">{a.confirmation_note}</span>
+        <span
+          className={clsx(
+            'max-w-[14rem] text-xs',
+            a.booking_status === 'cancelled' ? 'text-slate-400' : 'text-slate-700',
+          )}
+        >
+          {a.confirmation_note}
+        </span>
       ) : (
         <span className="text-slate-400">—</span>
       ),
@@ -79,16 +143,33 @@ const columns: Column<Row>[] = [
   {
     key: 'next',
     header: 'Next step',
+    sortValue: (a) => appointmentNextStep(a),
     render: (a) => {
       const step = appointmentNextStep(a)
-      return <span className={step === 'None' ? 'text-slate-400' : 'font-medium text-slate-700'}>{step}</span>
+      return (
+        <span
+          className={clsx(
+            step === 'None' ? 'text-slate-400' : 'font-medium text-slate-700',
+            a.booking_status === 'cancelled' && '!font-normal !text-slate-400',
+          )}
+        >
+          {step}
+        </span>
+      )
     },
   },
   {
     key: 'task',
     header: 'Related task',
     className: 'whitespace-nowrap',
-    render: (a) => (a.task_id ? <TextLink to={`/tasks/${a.task_id}`}>View task</TextLink> : <span className="text-slate-400">—</span>),
+    render: (a) =>
+      a.task_id ? (
+        <TextLink to={`/tasks/${a.task_id}`} className={isMutedAppointment(a) ? '!text-slate-400 hover:!text-slate-500' : undefined}>
+          View task
+        </TextLink>
+      ) : (
+        <span className="text-slate-400">—</span>
+      ),
   },
 ]
 
@@ -135,10 +216,9 @@ export default function AppointmentsPage() {
     <div>
       <PageHeader
         title="Appointments"
+        info={APP_MODE === 'clinic' ? CLINIC_HELP.appointmentsPage : undefined}
         subtitle={
-          APP_MODE === 'clinic' ? (
-            'Scheduled visits and Jiya confirmation status. Rescheduling on a call does not change the booking until staff rebook.'
-          ) : (
+          APP_MODE === 'clinic' ? undefined : (
             <span className="inline-flex flex-wrap items-center gap-2">
               Booking status and Jiya confirmation state, shown separately. <DemoBadge />
             </span>
@@ -159,15 +239,6 @@ export default function AppointmentsPage() {
         }}
       />
 
-      <div className="mb-6 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-        <Info className="mt-0.5 h-4 w-4 shrink-0" />
-        <p>
-          <span className="font-medium">{label('rescheduling_requested')}</span> means the patient asked for a different slot on a call. It does{' '}
-          <span className="font-medium">not</span> change the booking: date, time and booking status stay as they are until staff rebook and the booking
-          system confirms the change.
-        </p>
-      </div>
-
       <RefreshError error={data ? error : undefined} reload={reload} />
       <LoadGate data={data} error={error} loading={loading} reload={reload} />
 
@@ -186,7 +257,15 @@ export default function AppointmentsPage() {
       <div className="space-y-6">
         {[...groups.entries()].map(([key, rows]) => (
           <Card key={key} title={`${dayHeading(key)} (${rows.length})`}>
-            <DataTable columns={tableColumns} rows={rows} rowKey={(a) => a.appointment_id} />
+            <DataTable
+              columns={tableColumns}
+              rows={rows}
+              defaultSort={{ key: 'time', direction: 'asc' }}
+              rowKey={(a) => a.appointment_id}
+              rowClassName={(a) =>
+                isMutedAppointment(a) ? 'bg-slate-50/80 opacity-75 [&>td]:text-slate-400' : undefined
+              }
+            />
           </Card>
         ))}
       </div>

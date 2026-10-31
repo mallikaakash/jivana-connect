@@ -168,6 +168,7 @@
   html,
   body,
   #root {
+    min-height: 100dvh;
     height: 100%;
   }
 
@@ -201,6 +202,16 @@
       border-color 0.2s var(--ease-soft),
       box-shadow 0.2s var(--ease-soft),
       background-color 0.2s var(--ease-soft);
+  }
+
+  /* Custom chevron inset from the right edge (native arrows sit flush and look misaligned). */
+  select:not([multiple]):not([size]) {
+    appearance: none;
+    padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239b968b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1rem;
   }
 }
 
@@ -240,7 +251,76 @@
   }
 }
 
+.landing-dot-grid {
+  background-image: radial-gradient(rgb(63 107 74 / 0.12) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.landing-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.7s var(--ease-soft),
+    transform 0.7s var(--ease-soft);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.landing-reveal-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.landing-hero-in {
+  animation: rise 0.8s var(--ease-soft) both;
+  animation-delay: var(--hero-delay, 0ms);
+}
+
+.landing-float-soft {
+  animation: landing-float 7s var(--ease-soft) infinite;
+}
+
+.landing-pop-in {
+  animation: pop 0.55s var(--ease-soft) both;
+  animation-delay: var(--hero-delay, 0ms);
+}
+
+.landing-feature-card {
+  transition:
+    transform 0.35s var(--ease-soft),
+    box-shadow 0.35s var(--ease-soft),
+    border-color 0.35s var(--ease-soft);
+}
+
+.landing-feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lift);
+  border-color: rgb(63 107 74 / 0.22);
+}
+
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .landing-reveal {
+    opacity: 1;
+    transform: none;
+  }
+
+  .landing-float-soft {
+    animation: none;
+  }
+
+  .landing-feature-card:hover {
+    transform: none;
+  }
+
   *,
   *::before,
   *::after {

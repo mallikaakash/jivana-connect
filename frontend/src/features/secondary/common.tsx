@@ -96,7 +96,7 @@ export function FilterSelect<V extends string>({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as V)}
-        className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+        className="min-w-[7.5rem] rounded-xl border border-slate-300 bg-white py-1.5 pl-3 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -108,7 +108,10 @@ export function FilterSelect<V extends string>({
   )
 }
 
-/** Small muted helper/explanation line. */
+/** Inline (i) helper — prefer over a full-width Note line. */
+export { InfoHint } from '@/components/InfoHint'
+
+/** Small muted helper/explanation line (demo / legacy). Prefer InfoHint in clinic UI. */
 export function Note({ children, className }: { children: ReactNode; className?: string }) {
   return <p className={clsx('text-xs leading-relaxed text-slate-500', className)}>{children}</p>
 }

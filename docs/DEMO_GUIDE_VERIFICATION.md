@@ -42,7 +42,7 @@ Re-run checks: `./scripts/verify-demo-guide-e2e.sh`
 | Item | Status |
 |------|--------|
 | Cloud Scheduler `jivana-daily-confirmation` `0 10 * * *` Asia/Calcutta | **Pass** |
-| In-process scheduler + `CLINIC_CONFIRMATION_BATCH_TIME` | **Pass** (set to **10:00** IST in `.env.gcp`; redeploy to apply) |
+| In-process scheduler + `CLINIC_CONFIRMATION_BATCH_TIME` | **Pass** (set to **16:00** IST in `.env.gcp`; redeploy to apply) |
 | Manual batch create/schedule | **Pass** — Batches UI + API |
 | Daily confirmation preview | **Pass** — `GET /api/clinic/daily-confirmation-batch/preview` |
 

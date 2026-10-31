@@ -97,9 +97,18 @@ def test_webhook_disconnect_with_transcript_infers_reschedule(live_client):
     assert c["status"] == "completed"
     assert c["outcome"] == "rescheduling_requested"
     detail = live_client.get("/api/tasks/task_demo_001").json()
-    assert detail["appointment"]["confirmation_state"] == "rescheduling_requested"
-    assert detail["task"]["status"] == "awaiting_staff_action"
-    assert "5" in detail["task"]["next_action"] or "November" in detail["task"]["next_action"]
+    appt = detail["appointment"]
+    assert appt["confirmation_state"] == "pending"
+    assert appt["scheduled_at"] == "2026-11-05T10:30:00+05:30"
+    assert appt["booking_status"] == "scheduled"
+    task = detail["task"]
+    assert task["status"] == "pending"
+    assert "Automatic confirmation call" in task["next_action"]
+    assert "5 Nov" in task["title"]
+    items = live_client.get("/api/appointments").json()["items"]
+    old = next(a for a in items if a["appointment_id"] == "appt_demo_001")
+    assert old["booking_status"] == "cancelled"
+    assert old["scheduled_at"] == "2026-10-31T10:30:00+05:30"
 
 
 def test_webhook_no_answer_sets_task_due(live_client):
@@ -169,6 +178,57 @@ def test_test_reminder_not_done_keeps_task_pending(live_client):
     assert "Remind again" in detail["task"]["next_action"]
     tt = detail["task"].get("test_tracking") or {}
     assert tt.get("test_completion_reported") is not True
+
+
+def test_test_reminder_done_schedules_on_same_call_no_callback_task(live_client):
+    """Test done + follow-up window on one call — desk books; no callback_request spawn."""
+    svc = live_client.app.state.service
+    svc.settings.jivana_mode = "clinic"
+    task = svc.store.get("tasks", "task_demo_011")
+    if task is None:
+        return
+    task.update(status="pending", attempt_count=0, latest_outcome=None, spawned_followup_task_id=None)
+    svc.store.save("tasks", task)
+    patient = svc.store.get("patients", task["patient_id"])
+    patient["phone_e164"] = "+919999990101"
+    svc.store.save("patients", patient)
+    before = [
+        t
+        for t in live_client.get("/api/tasks", params={"task_type": "callback_request", "patient_id": task["patient_id"]}).json()["items"]
+    ]
+    call = _start_live(live_client, "task_demo_011")
+    r = live_client.post(
+        "/api/webhooks/bolna",
+        json={
+            "id": call["provider_call_id"],
+            "status": "completed",
+            "summary": "Patient completed lipid test and prefers follow-up next week.",
+            "transcript": (
+                "assistant: Have you completed the lipid profile?\n"
+                "user: Yes I did it yesterday.\n"
+                "assistant: When would you like a follow-up visit?\n"
+                "user: Next week morning works."
+            ),
+            "extracted_data": {
+                "test_completed": True,
+                "test_date": "yesterday",
+                "callback_window": "Next week morning",
+                "callback_requested": True,
+            },
+        },
+    )
+    assert r.status_code == 200
+    detail = live_client.get(f"/api/calls/{call['call_id']}").json()
+    assert detail["call"]["outcome"] == "test_completion_reported"
+    assert detail["task"]["status"] == "awaiting_staff_action"
+    assert "Book follow-up visit" in detail["task"]["next_action"]
+    assert detail["task"].get("callback_window") == "Next week morning"
+    assert detail["task"].get("spawned_followup_task_id") in (None, "")
+    after = [
+        t
+        for t in live_client.get("/api/tasks", params={"task_type": "callback_request", "patient_id": task["patient_id"]}).json()["items"]
+    ]
+    assert len(after) == len(before)
 
 
 def test_test_reminder_inferred_from_short_transcript_without_extraction(live_client):

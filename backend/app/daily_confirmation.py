@@ -10,8 +10,8 @@ IST = timeutil.IST
 
 
 def parse_batch_time(hhmm: str) -> time:
-    parts = (hhmm or "10:00").strip().split(":")
-    hour = int(parts[0]) if parts else 10
+    parts = (hhmm or "16:00").strip().split(":")
+    hour = int(parts[0]) if parts else 16
     minute = int(parts[1]) if len(parts) > 1 else 0
     return time(max(0, min(23, hour)), max(0, min(59, minute)))
 

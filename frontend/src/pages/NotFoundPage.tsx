@@ -6,7 +6,7 @@ export default function NotFoundPage() {
     <div>
       <EmptyState title="Page not found" description="That page does not exist in this prototype." />
       <div className="text-center">
-        <Link to="/" className="text-sm font-medium text-teal-700 hover:underline">
+        <Link to="/today" className="text-sm font-medium text-teal-700 hover:underline">
           Back to overview
         </Link>
       </div>

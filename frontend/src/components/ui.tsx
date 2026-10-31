@@ -1,7 +1,10 @@
 import clsx from 'clsx'
 import { AlertTriangle, Inbox, Loader2, RotateCw } from 'lucide-react'
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { InfoHint } from '@/components/InfoHint'
 import { label, toneFor, type Tone } from '@/lib/format'
+
+export { InfoHint } from '@/components/InfoHint'
 
 const TONE_CLASSES: Record<Tone, string> = {
   green: 'bg-emerald-50 text-emerald-700 ring-emerald-600/15',
@@ -58,7 +61,21 @@ export function DemoBadge({ children = 'Demo data', className }: { children?: Re
   )
 }
 
-export function Card({ title, actions, children, className, bodyClassName }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; bodyClassName?: string }) {
+export function Card({
+  title,
+  titleInfo,
+  actions,
+  children,
+  className,
+  bodyClassName,
+}: {
+  title?: ReactNode
+  titleInfo?: ReactNode
+  actions?: ReactNode
+  children: ReactNode
+  className?: string
+  bodyClassName?: string
+}) {
   return (
     <section
       className={clsx(
@@ -68,7 +85,14 @@ export function Card({ title, actions, children, className, bodyClassName }: { t
     >
       {(title || actions) && (
         <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
-          <h2 className="text-[15px] font-medium tracking-[-0.005em] text-navy-800">{title}</h2>
+          <h2 className="flex items-center gap-2 text-[15px] font-medium tracking-[-0.005em] text-navy-800">
+            <span className="min-w-0">{title}</span>
+            {titleInfo && (
+              <InfoHint title={typeof title === 'string' ? title : undefined} className="shrink-0">
+                {titleInfo}
+              </InfoHint>
+            )}
+          </h2>
           {actions}
         </header>
       )}
@@ -100,9 +124,12 @@ export function CountUp({ value, duration = 900 }: { value: number; duration?: n
 
 export function SummaryCard({ label: title, value, hint, icon, tone = 'grey' }: { label: string; value: ReactNode; hint?: string; icon?: ReactNode; tone?: Tone }) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-all duration-500 ease-soft hover:-translate-y-0.5 hover:shadow-lift">
+    <div className="group relative overflow-visible rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-all duration-500 ease-soft hover:-translate-y-0.5 hover:shadow-lift">
       <div className="flex items-start justify-between gap-3">
-        <span className="eyebrow">{title}</span>
+        <span className="eyebrow inline-flex items-center gap-1.5">
+          {title}
+          {hint && <InfoHint title={title}>{hint}</InfoHint>}
+        </span>
         {icon && (
           <span className={clsx('rounded-full p-2 ring-1 ring-inset transition-transform duration-500 ease-soft group-hover:scale-110 group-hover:-rotate-6', TONE_CLASSES[tone])}>
             {icon}
@@ -112,19 +139,38 @@ export function SummaryCard({ label: title, value, hint, icon, tone = 'grey' }: 
       <div className="mt-3 font-serif text-[2.75rem] leading-none font-light tracking-[-0.03em] text-navy-900">
         {typeof value === 'number' ? <CountUp value={value} /> : value}
       </div>
-      {hint && <div className="mt-2.5 text-xs text-slate-500">{hint}</div>}
       <span className={clsx('absolute inset-x-0 bottom-0 h-0.5 origin-left scale-x-0 transition-transform duration-700 ease-soft group-hover:scale-x-100', DOT_CLASSES[tone])} />
     </div>
   )
 }
 
 /** `accent` renders a second headline line in leaf green, as on the Jivana site. */
-export function PageHeader({ title, accent, subtitle, actions }: { title: string; accent?: string; subtitle?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({
+  title,
+  accent,
+  subtitle,
+  info,
+  actions,
+}: {
+  title: string
+  accent?: string
+  subtitle?: ReactNode
+  /** Longer help copy — shown via (i) next to the title instead of a subtitle line. */
+  info?: ReactNode
+  actions?: ReactNode
+}) {
   return (
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
         <h1 className="text-[2.5rem] leading-[1.05] font-light text-navy-900">
-          {title}
+          <span className="inline-flex items-center gap-2.5">
+            <span>{title}</span>
+            {info && (
+              <InfoHint title={title} className="translate-y-px">
+                {info}
+              </InfoHint>
+            )}
+          </span>
           {accent && <span className="block text-teal-600">{accent}</span>}
         </h1>
         {subtitle && <div className="mt-2 max-w-2xl text-[15px] leading-relaxed text-slate-500">{subtitle}</div>}

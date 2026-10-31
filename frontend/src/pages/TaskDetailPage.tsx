@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { AlertTriangle, ArrowLeft, Bot, ChevronRight, Clock, Lock, PhoneCall, PhoneForwarded, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ChevronDown, ChevronRight, Clock, Lock, PhoneCall, PhoneForwarded } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, APP_MODE, type Call, type TaskStatus } from '@/api'
@@ -8,11 +8,31 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { PatientSummary } from '@/components/PatientSummary'
 import { Timeline } from '@/components/Timeline'
 import { Button, Card, DemoBadge, EmptyState, ErrorBanner, ExtractedFields, LoadingState, StatusBadge } from '@/components/ui'
-import { formatDateTime, label, outcomeLabel, relativeTime } from '@/lib/format'
+import {
+  formatDateTime,
+  label,
+  outcomeLabel,
+  relativeTime,
+  taskActionVisual,
+  TASK_ACTION_PANEL,
+  taskStatusLabel,
+} from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
 import { AppointmentCard } from '@/features/core/AppointmentCard'
 import { CallModeBadge } from '@/features/core/CallModeBadge'
 import { isCallActive, isCallTerminal, isTaskOverdue, MAX_ATTEMPTS } from '@/features/core/helpers'
+import {
+  jiyaScriptSummary,
+  showCallsListSection,
+  showDueChipInHeader,
+  showJiyaScript,
+  showLatestResultSection,
+  showPriorityBadge,
+  showRecentActivity,
+  showTaskDepartment,
+  taskPageHeading,
+  taskTypeChip,
+} from '@/features/core/taskDetailLayout'
 import { LiveCallPanel } from '@/features/core/LiveCallPanel'
 import { TestTracker } from '@/features/core/TestTracker'
 
@@ -41,7 +61,6 @@ export default function TaskDetailPage() {
   const [startError, setStartError] = useState<Error | null>(null)
   const terminalTask = (s: TaskStatus) => s === 'completed' || s === 'cancelled' || s === 'failed'
 
-  // New task → forget any previous call session.
   useEffect(() => {
     setSession(null)
     setStartError(null)
@@ -51,10 +70,8 @@ export default function TaskDetailPage() {
   const data = detail.data?.task.task_id === taskId ? detail.data : undefined
   const sessionCall = session ? (data?.calls.find((c) => c.call_id === session.callId) ?? session.initialCall) : undefined
   const latestCall = data?.calls[0]
-  // Show the panel for a call started here, or for a call already running when the page opened.
   const panelCall = sessionCall ?? (latestCall && isCallActive(latestCall.status) ? latestCall : undefined)
 
-  // Poll every 2 s while any call for this task is still running; record each task status we observe.
   useEffect(() => {
     if (!data) return
     const active = data.calls.some((c) => isCallActive(c.status)) || (sessionCall ? !isCallTerminal(sessionCall.status) : false)
@@ -77,7 +94,7 @@ export default function TaskDetailPage() {
     } catch (e) {
       setStartError(e instanceof Error ? e : new Error(String(e)))
       setConfirmOpen(false)
-      void detail.reload() // backend preserves task state; show what it says now
+      void detail.reload()
     } finally {
       setStarting(false)
     }
@@ -114,48 +131,69 @@ export default function TaskDetailPage() {
   const retryAllowed = startError instanceof ApiError ? startError.retryAllowed : false
   const latestCompletedCall = calls.find((c) => c.status === 'completed')
 
+  const heading = taskPageHeading(task, appointment)
+  const showDue = showDueChipInHeader(task)
+  const showResults = showLatestResultSection(task, calls)
+  const showCalls = showCallsListSection(calls, callRunning)
+  const showScript = showJiyaScript(task, isDoctorClinic)
+  const historyEvents = events.length > 6 ? events.slice(0, 6) : events
+  const showHistory = showRecentActivity(events, calls, task)
+  const actionVisual = taskActionVisual(task)
+  const actionPanel = TASK_ACTION_PANEL[actionVisual]
+
   return (
     <div className="space-y-6">
       <BackLink doctorClinic={isDoctorClinic} />
 
-      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
-            <span className="rounded-full bg-navy-50 px-1.5 py-0.5 text-navy-700">{label(task.task_type)}</span>
-            <span>{task.department}</span>
-            <span className="text-slate-300">·</span>
+            <span className="rounded-full bg-navy-50 px-1.5 py-0.5 text-navy-700">{taskTypeChip(task)}</span>
+            {showTaskDepartment(task, APP_MODE === 'clinic') && <span>{task.department}</span>}
             {APP_MODE !== 'clinic' && (
               <>
+                <span className="text-slate-300">·</span>
                 <span className="font-mono text-[11px]">{task.task_id}</span>
                 <DemoBadge />
               </>
             )}
           </div>
-          <h1 className="mt-2 text-[2.25rem] leading-[1.1] font-light text-navy-900">{task.title}</h1>
+          <h1 className="mt-2 text-[2.25rem] leading-[1.1] font-light text-navy-900">{heading.title}</h1>
+          {heading.subtitle && <p className="mt-1 text-sm text-slate-600">{heading.subtitle}</p>}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className={clsx('rounded-full transition-all duration-500', statusChanged && 'ring-2 ring-teal-500 ring-offset-2')}>
-              <StatusBadge value={task.status} />
+              <StatusBadge value={task.status} text={taskStatusLabel(task.status)} />
             </span>
-            <StatusBadge value={task.priority} text={`${label(task.priority)} priority`} />
-            <span className={clsx('inline-flex items-center gap-1 text-xs', overdue ? 'font-medium text-red-600' : 'text-slate-500')} title={formatDateTime(task.due_at)}>
-              <Clock className="h-3.5 w-3.5" />
-              {overdue ? 'Overdue · ' : 'Due '}
-              {relativeTime(task.due_at)} · {formatDateTime(task.due_at)}
-            </span>
+            {showPriorityBadge(task) && <StatusBadge value={task.priority} text={`${label(task.priority)} priority`} />}
+            {showDue && (
+              <span className={clsx('inline-flex items-center gap-1 text-xs', overdue ? 'font-medium text-red-600' : 'text-slate-500')} title={formatDateTime(task.due_at)}>
+                <Clock className="h-3.5 w-3.5" />
+                {overdue ? 'Overdue · ' : 'Due '}
+                {relativeTime(task.due_at)}
+                {!/automatic confirmation call/i.test(task.next_action ?? '') && ` · ${formatDateTime(task.due_at)}`}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       <div className="stagger grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <section className="rounded-2xl border border-slate-200 border-l-4 border-l-teal-500 bg-white p-4 shadow-sm">
+          <section className={clsx('rounded-2xl border border-slate-200 border-l-4 p-4 shadow-sm', actionPanel.sectionClass)}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-teal-700">
-                  {isDoctorClinic ? 'Clinical next step' : 'Next action'}
+                <p className={clsx('text-[11px] font-medium uppercase tracking-[0.16em]', actionPanel.labelClass)}>
+                  {isDoctorClinic ? actionPanel.clinicalTitle : actionPanel.panelTitle}
                 </p>
-                <p className="mt-1.5 font-serif text-[1.6rem] leading-snug font-light tracking-[-0.02em] text-navy-900">{task.next_action}</p>
+                <p
+                  className={clsx(
+                    'mt-1.5 font-serif leading-snug font-light tracking-[-0.02em]',
+                    task.next_action && task.next_action.length > 72 ? 'text-xl' : 'text-[1.6rem]',
+                    actionVisual === 'complete' ? 'text-emerald-900' : actionVisual === 'staff' ? 'text-red-950' : 'text-navy-900',
+                  )}
+                >
+                  {task.next_action}
+                </p>
                 {!isDoctorClinic && (
                   <p className="mt-1 text-xs text-slate-500">
                     Attempts: <span className="font-medium text-slate-700">{task.attempt_count} of {MAX_ATTEMPTS}</span>
@@ -240,80 +278,82 @@ export default function TaskDetailPage() {
           )}
 
           {!isDoctorClinic && (
-          <Card title="Why Jiya is calling">
-            <p className="text-sm text-slate-800">{task.purpose}</p>
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
-                <Bot className="h-3.5 w-3.5" /> Safe call context passed to Jiya
-              </p>
-              <p className="mt-1.5 text-sm text-slate-700">{task.call_context}</p>
-              <p className="mt-2 flex items-center gap-1 text-[11px] text-slate-400">
-                <ShieldCheck className="h-3 w-3" /> Non-clinical context only. Jiya does not diagnose, prescribe or interpret results.
-              </p>
-            </div>
-          </Card>
+            <>
+              <Card title="Why Jiya is calling">
+                <p className="text-sm text-slate-800">{task.purpose}</p>
+              </Card>
+              {showScript && (
+                <details className="group rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-navy-800 marker:content-none">
+                    Voice call instructions
+                    <ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+                    <p className="text-[11px] text-slate-500">What the automated caller uses for this follow-up (not a script for staff).</p>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-700">{jiyaScriptSummary(task)}</p>
+                    <p className="mt-2 text-[11px] text-slate-400">Non-clinical only — no diagnosis or prescribing.</p>
+                  </div>
+                </details>
+              )}
+            </>
           )}
 
           {task.test_tracking && (
-            <Card title="Test / report tracking">
+            <Card title="Test & follow-up visit">
               <TestTracker tracking={task.test_tracking} />
             </Card>
           )}
 
-          {/* Latest result */}
-          <Card title="Latest result" actions={task.latest_outcome ? <StatusBadge value={task.latest_outcome} /> : undefined}>
-            {task.latest_outcome || task.extracted_fields ? (
-              <ExtractedFields fields={task.extracted_fields} />
-            ) : (
-              <EmptyState
-                title="No call result yet"
-                description={isDoctorClinic ? 'Front desk will place the follow-up call when due.' : 'Start a Jiya call to capture a structured outcome.'}
-              />
-            )}
-          </Card>
+          {showResults && (
+            <Card title="Call result" actions={task.latest_outcome ? <StatusBadge value={task.latest_outcome} text={outcomeLabel(task.latest_outcome, APP_MODE === 'clinic')} /> : undefined}>
+              {task.latest_outcome || task.extracted_fields ? (
+                <ExtractedFields fields={task.extracted_fields} />
+              ) : (
+                <EmptyState
+                  title="No structured fields yet"
+                  description={isDoctorClinic ? 'Front desk will place the follow-up call when due.' : 'Start a Jiya call to capture a structured outcome.'}
+                />
+              )}
+            </Card>
+          )}
 
-          {/* Calls */}
-          <Card title={`Calls · attempts ${task.attempt_count} of ${MAX_ATTEMPTS}`} bodyClassName="p-0">
-            {calls.length === 0 ? (
-              <EmptyState title="No calls yet" />
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {calls.map((c) => (
-                  <li key={c.call_id}>
-                    <Link to={`/calls/${c.call_id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3 hover:bg-slate-50">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-navy-800">{c.purpose}</p>
-                        <p className="text-xs text-slate-500" title={formatDateTime(c.created_at)}>
-                          {formatDateTime(c.started_at ?? c.created_at)} · {relativeTime(c.created_at)}
-                        </p>
-                      </div>
-                      <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                        Call <StatusBadge value={c.status} />
-                      </span>
-                      {c.outcome && (
-                        <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                          Outcome <StatusBadge value={c.outcome} />
-                        </span>
-                      )}
-                      {APP_MODE !== 'clinic' && <CallModeBadge isLive={c.is_live} />}
-                      <ChevronRight className="h-4 w-4 text-slate-300" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+          {showCalls && (
+            <Card title={`Call attempts (${task.attempt_count} of ${MAX_ATTEMPTS})`} bodyClassName="p-0">
+              {calls.length === 0 ? (
+                <EmptyState title="No calls yet" />
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {calls.map((c) => (
+                    <li key={c.call_id}>
+                      <Link to={`/calls/${c.call_id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3 hover:bg-slate-50">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-navy-800">{formatDateTime(c.started_at ?? c.created_at)}</p>
+                          <p className="text-xs text-slate-500">{relativeTime(c.created_at)}</p>
+                        </div>
+                        {c.outcome ? (
+                          <StatusBadge value={c.outcome} text={outcomeLabel(c.outcome, APP_MODE === 'clinic')} />
+                        ) : (
+                          <StatusBadge value={c.status} />
+                        )}
+                        {APP_MODE !== 'clinic' && <CallModeBadge isLive={c.is_live} />}
+                        <ChevronRight className="h-4 w-4 text-slate-300" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
         </div>
 
-        {/* Side column */}
         <div className="space-y-6">
           <Card title="Patient">
             <PatientSummary patient={patient} />
           </Card>
 
           {appointment && (
-            <Card title="Linked appointment">
-              <AppointmentCard appointment={appointment} />
+            <Card title={APP_MODE === 'clinic' ? 'Visit' : 'Linked appointment'}>
+              <AppointmentCard appointment={appointment} compact={APP_MODE === 'clinic' && task.task_type === 'appointment_confirmation'} />
             </Card>
           )}
 
@@ -340,8 +380,11 @@ export default function TaskDetailPage() {
             </Link>
           )}
 
-          <Card title="Action history">
-            <Timeline events={events} compact emptyTitle="No actions recorded yet" />
+          <Card title={showHistory && historyEvents.length > 0 ? 'Recent activity' : 'Action history'}>
+            <Timeline events={showHistory && historyEvents.length > 0 ? historyEvents : events} compact emptyTitle="No actions recorded yet" />
+            {showHistory && events.length > historyEvents.length && (
+              <p className="mt-2 text-[11px] text-slate-400">{events.length - historyEvents.length} older entries omitted</p>
+            )}
           </Card>
         </div>
       </div>
@@ -374,10 +417,10 @@ export default function TaskDetailPage() {
 
 function BackLink({ doctorClinic }: { doctorClinic?: boolean }) {
   const to = doctorClinic ? '/' : '/tasks'
-  const label = doctorClinic ? 'Today' : 'Tasks & follow-ups'
+  const labelText = doctorClinic ? 'Today' : 'Tasks & follow-ups'
   return (
     <Link to={to} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-navy-800">
-      <ArrowLeft className="h-4 w-4" /> {label}
+      <ArrowLeft className="h-4 w-4" /> {labelText}
     </Link>
   )
 }

@@ -60,7 +60,7 @@ def test_simulated_rescheduling_flow_never_touches_booking(client):
     task = detail["task"]
     assert task["status"] == "awaiting_staff_action"
     assert task["latest_outcome"] == "rescheduling_requested"
-    assert "day after tomorrow, after 4 PM" in task["next_action"]
+    assert "next week, mornings" in task["next_action"].lower()
     appt = detail["appointment"]
     assert appt["booking_status"] == "scheduled"
     assert appt["scheduled_at"] == appt_before["scheduled_at"]

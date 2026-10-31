@@ -6,7 +6,7 @@ import asyncio
 import logging
 import re
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from . import timeutil
@@ -17,6 +17,7 @@ from .transcript_inference import conversation_substantive
 from .config import Settings
 from .errors import ApiError, not_found
 from .clinic_demo_seed import build_clinic_demo_seed
+from .reschedule_parse import parse_reschedule_window_to_iso
 from .daily_confirmation import (
     appointment_on_date,
     batch_run_window,
@@ -52,6 +53,33 @@ RESOLUTION_TYPES = frozenset({
     "admin_handled",
 })
 _E164 = re.compile(r"^\+[1-9]\d{1,14}$")
+PATIENT_GENDERS = frozenset({"female", "male", "other", "prefer_not_to_say"})
+
+
+def normalize_patient_age(age: int | None) -> int | None:
+    if age is None:
+        return None
+    if age < 0 or age > 120:
+        raise ApiError(422, "validation_error", "Age must be between 0 and 120.", False)
+    return age
+
+
+def normalize_patient_gender(gender: str | None) -> str | None:
+    if gender is None or gender == "":
+        return None
+    if gender not in PATIENT_GENDERS:
+        raise ApiError(422, "validation_error", "Gender must be female, male, other, or prefer_not_to_say.", False)
+    return gender
+
+
+def normalize_e164(raw: str) -> str:
+    """Strip spaces/dashes; allow 00 prefix; ensure leading +."""
+    s = re.sub(r"[\s\-().]", "", (raw or "").strip())
+    if s.startswith("00"):
+        s = f"+{s[2:]}"
+    elif s and not s.startswith("+"):
+        s = f"+{s}"
+    return s
 # Live Jiya prompt is dental post-visit; other task types may not extract reliably.
 LIVE_JIYA_TASK_TYPES = frozenset({
     "appointment_confirmation",
@@ -89,6 +117,7 @@ class Service:
         self._bg: dict[str, asyncio.Task] = {}  # call_id -> simulator / poller task
         self._pollers: set[str] = set()
         self._scheduler: asyncio.Task | None = None
+        self._auto_dial_queue: list[str] = []
 
     # ------------------------------------------------------------------ lifecycle
     def startup(self) -> None:
@@ -195,9 +224,13 @@ class Service:
                             log.info("Daily confirmation batch skipped: %s", exc.message)
                         except Exception as exc:  # pragma: no cover
                             log.warning("Daily confirmation batch error: %s", exc)
-                elif self.settings.auto_dial_enabled and self.settings.live_voice:
+                followup_auto = self.settings.clinic_auto_dial_followups_enabled and self.settings.live_voice
+                legacy_auto = self.settings.auto_dial_enabled and self.settings.live_voice
+                if followup_auto or legacy_auto:
                     if not any(c["status"] in ACTIVE_CALL for c in self.store.all("calls")):
-                        task_id = self._pick_auto_dial_task()
+                        task_id = self._dequeue_auto_dial() or self._pick_auto_dial_task(
+                            followups_only=followup_auto and not legacy_auto,
+                        )
                         if task_id:
                             try:
                                 await self.start_call(task_id)
@@ -209,12 +242,29 @@ class Service:
         except asyncio.CancelledError:
             return
 
-    def _pick_auto_dial_task(self) -> str | None:
+    def _enqueue_auto_dial(self, task_id: str) -> None:
+        if task_id not in self._auto_dial_queue:
+            self._auto_dial_queue.append(task_id)
+
+    def _dequeue_auto_dial(self) -> str | None:
+        while self._auto_dial_queue:
+            task_id = self._auto_dial_queue.pop(0)
+            task = self.store.get("tasks", task_id)
+            if not task:
+                continue
+            eligible, _ = self.eligibility(task)
+            if eligible:
+                return task_id
+        return None
+
+    def _pick_auto_dial_task(self, *, followups_only: bool = False) -> str | None:
         now = timeutil.now()
         eod = timeutil.end_of_today()
         candidates = []
         for t in self.store.all("tasks"):
             if t["status"] not in ("pending", "due"):
+                continue
+            if followups_only and t["task_type"] == "appointment_confirmation":
                 continue
             due_at = _ts(t["due_at"])
             if due_at > eod:
@@ -224,7 +274,20 @@ class Service:
                 candidates.append(t)
         if not candidates:
             return None
-        candidates.sort(key=lambda t: (_ts(t["due_at"]), t["task_id"]))
+        priority = {
+            "callback_request": 0,
+            "test_report_reminder": 1,
+            "post_procedure_checkin": 2,
+            "clinician_task_reminder": 3,
+            "appointment_confirmation": 4,
+        }
+        candidates.sort(
+            key=lambda t: (
+                priority.get(t["task_type"], 5),
+                _ts(t["due_at"]),
+                t["task_id"],
+            ),
+        )
         return candidates[0]["task_id"]
 
     def recover_stuck_calls(self) -> int:
@@ -393,7 +456,361 @@ class Service:
                     return ot["task_id"]
         return None
 
+    def _confirmation_task_due(self, appt_scheduled_at: datetime) -> tuple[str, str]:
+        batch_time = parse_batch_time(self.settings.clinic_confirmation_batch_time)
+        moment = confirmation_call_moment(appt_scheduled_at, batch_time)
+        due_at = timeutil.iso(moment)
+        next_action = (
+            f"Automatic confirmation call on "
+            f"{moment.strftime('%d %b at %I:%M %p').lstrip('0')} "
+            f"(day before visit)"
+        )
+        return due_at, next_action
+
+    def _reschedule_window_candidates(self, task: dict, ex: dict | None = None) -> list[str]:
+        """All reschedule phrases from the call, extraction, and related callback tasks (order preserved)."""
+        out: list[str] = []
+
+        def add(raw: str | None) -> None:
+            if not raw:
+                return
+            w = str(raw).strip()
+            if w and w not in out:
+                out.append(w)
+
+        if ex:
+            add(ex.get("preferred_reschedule_window"))
+            add(ex.get("callback_window"))
+        extracted = task.get("extracted_fields") or {}
+        add(extracted.get("preferred_reschedule_window"))
+        add(extracted.get("callback_window"))
+        sid = task.get("spawned_followup_task_id")
+        if sid:
+            cb = self.store.get("tasks", sid)
+            if cb:
+                add(cb.get("callback_window"))
+        pid = task["patient_id"]
+        for t in self.store.find("tasks", patient_id=pid):
+            if (
+                t.get("task_type") == "callback_request"
+                and t.get("source_task_id") == task["task_id"]
+                and t.get("callback_window")
+            ):
+                add(t["callback_window"])
+        open_cb = ("pending", "due", "awaiting_staff_action")
+        for t in self.store.find("tasks", patient_id=pid):
+            if t.get("task_type") == "callback_request" and t.get("status") in open_cb and t.get("callback_window"):
+                add(t["callback_window"])
+        return out
+
+    def _resolve_reschedule_window(self, task: dict, ex: dict | None = None) -> str | None:
+        candidates = self._reschedule_window_candidates(task, ex)
+        return candidates[0] if candidates else None
+
+    def _reschedule_target(
+        self, task: dict, appt: dict, ex: dict | None = None
+    ) -> tuple[str, str] | None:
+        """First candidate that parses to a different calendar day than the current booking."""
+        scheduled_at = appt["scheduled_at"]
+        for window in self._reschedule_window_candidates(task, ex):
+            w = window[0].lower() + window[1:]
+            if self._reschedule_window_matches_booked_day(w, scheduled_at):
+                continue
+            new_iso = parse_reschedule_window_to_iso(w, scheduled_at)
+            if new_iso:
+                return new_iso, w
+        return None
+
+    def _close_redundant_callback_tasks(self, source_task_id: str, *, patient_id: str, new_scheduled_at: str) -> None:
+        new_day = _ts(new_scheduled_at).date()
+        for t in self.store.all("tasks"):
+            if t.get("task_type") != "callback_request":
+                continue
+            if t.get("status") not in ("pending", "due", "awaiting_staff_action"):
+                continue
+            if t.get("patient_id") != patient_id:
+                continue
+            linked = t.get("source_task_id") == source_task_id
+            window = t.get("callback_window")
+            matches_new_day = False
+            if window:
+                iso = parse_reschedule_window_to_iso(window, new_scheduled_at)
+                if iso and _ts(iso).date() == new_day:
+                    matches_new_day = True
+            if linked or matches_new_day:
+                self._set_task_status(t, "completed")
+                t["next_action"] = "No action needed — new visit date booked from call"
+                t["updated_at"] = timeutil.now_iso()
+                self.store.save("tasks", t)
+
+    def _auto_reschedule_appointment(self, appt: dict, task: dict, new_scheduled_at: str, window: str) -> dict | None:
+        """Cancel the original booking (kept on the calendar) and create a new scheduled visit."""
+        if appt.get("booking_status") != "scheduled":
+            return None
+        old_human = timeutil.human(appt["scheduled_at"])
+        old_id = appt["appointment_id"]
+        pid = appt["patient_id"]
+        now = timeutil.now_iso()
+        new_human = timeutil.human(new_scheduled_at)
+
+        appt["booking_status"] = "cancelled"
+        appt["confirmation_state"] = "rescheduling_requested"
+        appt["task_id"] = None
+        appt["updated_at"] = now
+        self.store.save("appointments", appt)
+        self.add_event(
+            "appointment",
+            old_id,
+            pid,
+            "staff_action_recorded",
+            f"Booking cancelled — patient rescheduled to {new_human} (from call: {window})",
+            "system",
+        )
+
+        new_appt_id = new_id("appt")
+        new_appt = {
+            "appointment_id": new_appt_id,
+            "patient_id": pid,
+            "scheduled_at": new_scheduled_at,
+            "department": appt.get("department") or self.settings.clinic_name,
+            "clinician": appt.get("clinician") or (self.settings.clinic_lead_name or "Clinic team"),
+            "booking_status": "scheduled",
+            "confirmation_state": "pending",
+            "task_id": task["task_id"],
+            "rescheduled_from_appointment_id": old_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        self.store.save("appointments", new_appt)
+
+        appt_dt = _ts(new_scheduled_at)
+        due_at, next_action = self._confirmation_task_due(appt_dt)
+        task["appointment_id"] = new_appt_id
+        task["title"] = f"Confirm appointment — {new_human}"
+        task["call_context"] = (
+            f"Confirm attendance for appointment on {new_human} with {new_appt.get('clinician', 'clinic team')}. "
+            "Record reschedule preference only; do not book a new slot."
+        )
+        task["due_at"] = due_at
+        task["next_action"] = next_action
+        task["updated_at"] = now
+        self.store.save("tasks", task)
+        self._close_redundant_callback_tasks(task["task_id"], patient_id=pid, new_scheduled_at=new_scheduled_at)
+        self.add_event(
+            "appointment",
+            new_appt_id,
+            pid,
+            "staff_action_recorded",
+            f"New visit booked — {new_human} (replacing cancelled {old_human})",
+            "system",
+        )
+        return new_appt
+
+    def _sync_confirmation_task_schedule(self, task: dict) -> None:
+        """Keep pending confirmation due times aligned with current batch time (IST)."""
+        if task.get("task_type") != "appointment_confirmation":
+            return
+        if task.get("status") not in ("pending", "due"):
+            return
+        if task.get("status") == "due" and (task.get("next_action") or "").strip() == "Retry call":
+            return
+        appt_id = task.get("appointment_id")
+        if not appt_id:
+            return
+        appt = self.store.get("appointments", appt_id)
+        if not appt or appt.get("booking_status") != "scheduled":
+            return
+        appt_dt = _ts(appt["scheduled_at"])
+        due_at, next_action = self._confirmation_task_due(appt_dt)
+        if task.get("due_at") == due_at and task.get("next_action") == next_action:
+            return
+        task["due_at"] = due_at
+        task["next_action"] = next_action
+        task["updated_at"] = timeutil.now_iso()
+        self.store.save("tasks", task)
+
+    @staticmethod
+    def _human_label_to_iso(label: str, time_fallback: str) -> str | None:
+        """Parse '1 Nov, 04:00 PM' using year (and clock) from a reference ISO timestamp."""
+        fb = timeutil.parse(time_fallback)
+        if not fb:
+            return None
+        label = label.strip()
+        try:
+            if "," not in label:
+                return None
+            day_month, time_part = label.split(",", 1)
+            dt = datetime.strptime(
+                f"{day_month.strip()} {time_part.strip()} {fb.year}",
+                "%d %b %I:%M %p %Y",
+            )
+            dt = dt.replace(tzinfo=timeutil.IST)
+            return timeutil.iso(dt)
+        except ValueError:
+            return None
+
+    def _infer_cancelled_slot_iso(self, task: dict, current_appt: dict) -> str | None:
+        """Original visit time when the row was moved in-place without leaving a cancelled booking."""
+        task_id = task["task_id"]
+        appt_id = current_appt["appointment_id"]
+        pid = task["patient_id"]
+        current = current_appt["scheduled_at"]
+        evts = self._sort_events([e for e in self.store.all("events") if e.get("patient_id") == pid])
+        for e in evts:
+            msg = e.get("message") or ""
+            if e["entity_id"] not in (task_id, appt_id):
+                continue
+            m = re.search(r"Visit rescheduled — (.+?) → (.+?)(?: \(|$)", msg)
+            if m:
+                iso = self._human_label_to_iso(m.group(1).strip(), current)
+                if iso and iso != current:
+                    return iso
+            m = re.search(r"replacing cancelled (.+?)$", msg)
+            if m:
+                iso = self._human_label_to_iso(m.group(1).strip(), current)
+                if iso and iso != current:
+                    return iso
+        for e in reversed(evts):
+            if e["entity_id"] != task_id:
+                continue
+            msg = e.get("message") or ""
+            if "Confirm appointment —" not in msg:
+                continue
+            fragment = msg.split("Confirm appointment —", 1)[-1].strip()
+            iso = self._human_label_to_iso(fragment, current)
+            if iso and iso != current:
+                return iso
+        booked = next(
+            (
+                e
+                for e in reversed(evts)
+                if e["entity_id"] == appt_id and (e.get("message") or "").startswith("Appointment booked —")
+            ),
+            None,
+        )
+        if booked:
+            fragment = booked["message"].split("Appointment booked —", 1)[-1].strip()
+            iso = self._human_label_to_iso(fragment, current)
+            if iso and iso != current:
+                return iso
+        return None
+
+    def _maybe_backfill_cancelled_prior_booking(self, task: dict) -> None:
+        """Leave a grey cancelled row on the original day after an in-place reschedule (legacy data)."""
+        if task.get("task_type") != "appointment_confirmation":
+            return
+        appt_id = task.get("appointment_id")
+        if not appt_id:
+            return
+        appt = self.store.get("appointments", appt_id)
+        if not appt or appt.get("booking_status") != "scheduled":
+            return
+        if appt.get("rescheduled_from_appointment_id"):
+            return
+        ex = task.get("extracted_fields") or {}
+        rescheduled = task.get("latest_outcome") == "rescheduling_requested" or ex.get(
+            "appointment_outcome"
+        ) == "rescheduling_requested"
+        if not rescheduled:
+            return
+        prior_iso = self._infer_cancelled_slot_iso(task, appt)
+        if not prior_iso or prior_iso == appt["scheduled_at"]:
+            return
+        pid = appt["patient_id"]
+        for a in self.store.find("appointments", patient_id=pid):
+            if a.get("booking_status") == "cancelled" and a.get("scheduled_at") == prior_iso:
+                appt["rescheduled_from_appointment_id"] = a["appointment_id"]
+                self.store.save("appointments", appt)
+                return
+        now = timeutil.now_iso()
+        old_id = new_id("appt")
+        self.store.save(
+            "appointments",
+            {
+                "appointment_id": old_id,
+                "patient_id": pid,
+                "scheduled_at": prior_iso,
+                "department": appt.get("department") or self.settings.clinic_name,
+                "clinician": appt.get("clinician") or (self.settings.clinic_lead_name or "Clinic team"),
+                "booking_status": "cancelled",
+                "confirmation_state": "rescheduling_requested",
+                "task_id": None,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        appt["rescheduled_from_appointment_id"] = old_id
+        self.store.save("appointments", appt)
+        self.add_event(
+            "appointment",
+            old_id,
+            pid,
+            "staff_action_recorded",
+            f"Booking cancelled — visit moved to {timeutil.human(appt['scheduled_at'])} (history backfilled)",
+            "system",
+        )
+
+    def _reconcile_confirmation_task_after_reschedule(self, task: dict) -> None:
+        """Task still 'staff action' while booking already moved to pending confirmation."""
+        if task.get("task_type") != "appointment_confirmation":
+            return
+        if task.get("status") != "awaiting_staff_action":
+            return
+        if task.get("latest_outcome") != "rescheduling_requested":
+            return
+        appt_id = task.get("appointment_id")
+        if not appt_id:
+            return
+        appt = self.store.get("appointments", appt_id)
+        if not appt or appt.get("booking_status") != "scheduled":
+            return
+        if appt.get("confirmation_state") != "pending":
+            return
+        if appt.get("task_id") != task["task_id"]:
+            return
+        self._set_task_status(task, "pending")
+        self._sync_confirmation_task_schedule(task)
+
+    def _sync_reschedule_history(self, task: dict) -> None:
+        self._maybe_apply_stored_reschedule(task)
+        self._maybe_backfill_cancelled_prior_booking(task)
+        self._reconcile_confirmation_task_after_reschedule(task)
+
+    def _maybe_apply_stored_reschedule(self, task: dict) -> None:
+        """If a call already captured a concrete new date but booking was never moved, fix on read."""
+        if task.get("task_type") != "appointment_confirmation":
+            return
+        if task.get("status") not in ("awaiting_staff_action", "pending", "due"):
+            return
+        if task.get("latest_outcome") != "rescheduling_requested":
+            return
+        appt_id = task.get("appointment_id")
+        if not appt_id:
+            return
+        appt = self.store.get("appointments", appt_id)
+        if not appt or appt.get("booking_status") != "scheduled":
+            return
+        if appt.get("confirmation_state") != "rescheduling_requested":
+            return
+        target = self._reschedule_target(task, appt)
+        if not target:
+            return
+        new_iso, w = target
+        if not self._auto_reschedule_appointment(appt, task, new_iso, w):
+            return
+        self._set_task_status(task, "pending")
+        self.add_event(
+            "task",
+            task["task_id"],
+            task["patient_id"],
+            "task_status_changed",
+            "Visit date updated from stored reschedule preference — confirmation call re-queued",
+            "system",
+        )
+
     def task_out(self, t: dict, with_name: bool = False) -> dict:
+        self._sync_confirmation_task_schedule(t)
+        self._sync_reschedule_history(t)
         out = public(t)
         eligible, reason = self.eligibility(t)
         out["call_eligible"] = eligible
@@ -480,10 +897,14 @@ class Service:
                 {
                     "enabled": True,
                     "batch_time_ist": self.settings.clinic_confirmation_batch_time,
-                    "auto_dial_enabled": bool(self.settings.auto_dial_enabled),
+                    "auto_dial_enabled": bool(
+                        self.settings.auto_dial_enabled or self.settings.clinic_auto_dial_followups_enabled,
+                    ),
+                    "auto_dial_followups_enabled": bool(self.settings.clinic_auto_dial_followups_enabled),
                     "description": (
                         f"Appointment confirmations for tomorrow's visits run as one Bolna batch "
-                        f"around {self.settings.clinic_confirmation_batch_time} IST each day."
+                        f"around {self.settings.clinic_confirmation_batch_time} IST each day. "
+                        "Other follow-ups (test reminders, scheduling callbacks, check-ins) are auto-dialed by Jiya when due."
                     ),
                 }
                 if clinic and self.settings.clinic_daily_confirmation_batch_enabled
@@ -506,7 +927,10 @@ class Service:
                 else {}
             ),
             "dial_override_active": bool(clinic and self.settings.clinic_dial_override_e164),
-            "auto_dial_enabled": bool(clinic and self.settings.auto_dial_enabled),
+            "auto_dial_enabled": bool(
+                clinic and (self.settings.auto_dial_enabled or self.settings.clinic_auto_dial_followups_enabled),
+            ),
+            "auto_dial_followups_enabled": bool(clinic and self.settings.clinic_auto_dial_followups_enabled),
             "data_mode": "live" if clinic else "seeded",
             "voice_mode": "live" if live else ("unconfigured" if clinic else "simulated"),
             "workflows": list(TASK_TYPES),
@@ -538,6 +962,9 @@ class Service:
     def dashboard(self) -> dict:
         now = timeutil.now()
         eod = timeutil.end_of_today()
+        for t in self.store.all("tasks"):
+            if t.get("task_type") == "appointment_confirmation":
+                self._sync_reschedule_history(t)
         tasks = self.store.all("tasks")
         calls = self.store.all("calls")
         week_ago = now - timedelta(days=7)
@@ -558,7 +985,10 @@ class Service:
         clinical_inbox = [i for i in needs if i["audience"] == "clinical"]
         operations_inbox = [i for i in needs if i["audience"] == "operations"]
 
-        queue = sorted((t for t in tasks if t["status"] in ("pending", "due")), key=lambda t: _ts(t["due_at"]))[:6]
+        pending_due = [t for t in tasks if t["status"] in ("pending", "due")]
+        for t in pending_due:
+            self._sync_confirmation_task_schedule(t)
+        queue = sorted(pending_due, key=lambda t: _ts(t["due_at"]))[:6]
         return {
             "patients_count": len(self.store.all("patients")),
             "followups_due_count": len(followups_due),
@@ -680,19 +1110,24 @@ class Service:
             out["open_followups"] = sum(1 for t in self.store.find("tasks", patient_id=pid) if t["status"] not in TERMINAL_TASK)
             out["last_contact_at"] = max(contacts, key=_ts) if contacts else None
             items.append(out)
-        return items
+        return sorted(items, key=lambda p: _ts(p.get("created_at")), reverse=True)
 
     def patient_detail(self, patient_id: str) -> dict:
         p = self._get("patients", patient_id, "Patient")
+        task_rows = list(self.store.find("tasks", patient_id=patient_id))
+        for t in task_rows:
+            if t.get("task_type") == "appointment_confirmation":
+                self._sync_reschedule_history(t)
+        task_rows = list(self.store.find("tasks", patient_id=patient_id))
         appts = sorted(self.store.find("appointments", patient_id=patient_id), key=lambda a: _ts(a["scheduled_at"]))
-        tasks = sorted(self.store.find("tasks", patient_id=patient_id), key=lambda t: _ts(t["due_at"]))
+        tasks = sorted(task_rows, key=lambda t: _ts(t["due_at"]))
         calls = self._calls_newest(self.store.find("calls", patient_id=patient_id))
         escs = sorted(self.store.find("escalations", patient_id=patient_id), key=lambda e: _ts(e["created_at"]), reverse=True)
         events = [public(e) for e in self._sort_events(self.store.find("events", patient_id=patient_id))]
         return {
             "patient": self.patient_out(p),
-            "appointments": [public(a) for a in appts],
-            "tasks": [self.task_out(t) for t in tasks],
+            "appointments": [self.appointment_out(a) for a in appts],
+            "tasks": [self.task_out(self.store.get("tasks", t["task_id"]) or t) for t in tasks],
             "calls": [public(c) for c in calls],
             "escalations": [public(e) for e in escs],
             "events": events,
@@ -715,16 +1150,22 @@ class Service:
     def appointment_out(self, appt: dict) -> dict:
         out = self.named(appt)
         pid = appt["patient_id"]
-        for t in self.store.find("tasks", patient_id=pid):
-            if (
-                t.get("task_type") == "callback_request"
-                and t.get("status") in ("pending", "due", "awaiting_staff_action")
-                and t.get("callback_window")
-            ):
-                out["requested_slot"] = t["callback_window"]
-                out["requested_slot_task_id"] = t["task_id"]
-                break
+        if appt.get("booking_status") == "cancelled":
+            out["confirmation_note"] = "Cancelled — patient moved to a new visit date"
+            return out
         task_id = appt.get("task_id")
+        conf_task_id = task_id
+        if conf_task_id:
+            for t in self.store.find("tasks", patient_id=pid):
+                if (
+                    t.get("task_type") == "callback_request"
+                    and t.get("status") in ("pending", "due", "awaiting_staff_action")
+                    and t.get("callback_window")
+                    and t.get("source_task_id") == conf_task_id
+                ):
+                    out["requested_slot"] = t["callback_window"]
+                    out["requested_slot_task_id"] = t["task_id"]
+                    break
         if not task_id:
             return out
         task = self.store.get("tasks", task_id)
@@ -742,9 +1183,20 @@ class Service:
         return out
 
     def list_appointments(self) -> list[dict]:
+        for t in self.store.all("tasks"):
+            if t.get("task_type") == "appointment_confirmation":
+                self._sync_reschedule_history(t)
         return [self.appointment_out(a) for a in sorted(self.store.all("appointments"), key=lambda a: _ts(a["scheduled_at"]))]
 
-    def list_tasks(self, status=None, task_type=None, priority=None, patient_id=None, due=None) -> list[dict]:
+    def list_tasks(
+        self,
+        status=None,
+        task_type=None,
+        priority=None,
+        patient_id=None,
+        due=None,
+        queue=None,
+    ) -> list[dict]:
         now, sod, eod = timeutil.now(), timeutil.start_of_today(), timeutil.end_of_today()
         items = []
         for t in sorted(self.store.all("tasks"), key=lambda t: _ts(t["due_at"])):
@@ -763,11 +1215,26 @@ class Service:
                 continue
             if due == "upcoming" and not (due_at > eod):
                 continue
+            if queue == "followups_due":
+                if t["status"] not in ("pending", "due") or due_at > eod:
+                    continue
+            elif queue in ("operations", "clinical"):
+                item = self._needs_attention_item(t, now)
+                if not item or item["audience"] != queue:
+                    continue
+            elif queue == "open":
+                if t["status"] in TERMINAL_TASK:
+                    continue
+            elif queue == "history":
+                if t["status"] not in ("completed", "cancelled"):
+                    continue
             items.append(self.task_out(t, with_name=True))
         return items
 
     def task_detail(self, task_id: str) -> dict:
         t = self._get("tasks", task_id, "Task")
+        self._sync_reschedule_history(t)
+        t = self.store.get("tasks", task_id) or t
         calls = self._calls_newest(self.store.find("calls", task_id=task_id))
         ids = {task_id, *(c["call_id"] for c in calls)}
         if t.get("escalation_id"):
@@ -1254,6 +1721,8 @@ class Service:
             result = self._apply_completed(call, task, appt, ex, summary, actor)
 
         task["updated_at"] = now
+        if task.get("appointment_id"):
+            appt = self.store.get("appointments", task["appointment_id"])
         if appt is not None:
             self.store.save("appointments", appt)
         self.store.save_many(("calls", call), ("tasks", task))
@@ -1294,6 +1763,7 @@ class Service:
         validation_failed = False
         escalation = None
         callback_requested = ex.get("callback_requested") is True
+        auto_rescheduled_booking = False
 
         if wf == "appointment_confirmation":
             ao = ex.get("appointment_outcome")
@@ -1305,19 +1775,39 @@ class Service:
                               "for review. Appointment booking unchanged.")
                 next_action = "Review call — outcome could not be validated"
             outcome = ao
-            window = ex.get("preferred_reschedule_window")
+            window = self._resolve_reschedule_window(task, ex)
             if appt is not None:
-                appt["confirmation_state"] = ao  # booking_status / scheduled_at are NEVER touched here
+                appt["confirmation_state"] = ao  # booking_status unchanged unless auto-reschedule runs
             if ao == "confirmed":
                 new_status, next_action = "completed", "No action needed"
                 result_msg = "Outcome validated. Task completed. Appointment confirmation recorded; booking unchanged."
                 extracted_msg = "Appointment confirmed"
             elif ao == "rescheduling_requested":
-                if window:
-                    window = window[0].lower() + window[1:]  # reads mid-sentence: "prefers day after tomorrow"
-                next_action = f"Call patient to offer a new slot (prefers {window})" if window else "Call patient to offer a new slot"
-                result_msg = "Outcome validated. Task moved to awaiting_staff_action. Appointment booking unchanged until staff rebook."
-                extracted_msg = f"Rescheduling requested — prefers {window}" if window else "Rescheduling requested"
+                w = window[0].lower() + window[1:] if window else None
+                auto_moved = False
+                new_appt: dict | None = None
+                if appt is not None:
+                    target = self._reschedule_target(task, appt, ex)
+                    if target:
+                        new_iso, w = target
+                        new_appt = self._auto_reschedule_appointment(appt, task, new_iso, w)
+                        auto_moved = new_appt is not None
+                        if auto_moved:
+                            appt = new_appt
+                if auto_moved:
+                    auto_rescheduled_booking = True
+                    new_status = "pending"
+                    new_human = timeutil.human(appt["scheduled_at"])
+                    result_msg = (
+                        f"Patient requested another day. Original visit cancelled; new booking on {new_human}; "
+                        "confirmation call queued for the day before."
+                    )
+                    extracted_msg = f"Rescheduled to {new_human}"
+                    next_action = task["next_action"]
+                else:
+                    next_action = f"Call patient to offer a new slot (prefers {w})" if w else "Call patient to offer a new slot"
+                    result_msg = "Outcome validated. Task moved to awaiting_staff_action. Appointment booking unchanged until staff rebook."
+                    extracted_msg = f"Rescheduling requested — prefers {w}" if w else "Rescheduling requested"
             elif ao == "declined":
                 next_action = "Review cancellation with patient"
                 result_msg = "Outcome validated. Patient declined; task moved to awaiting_staff_action. Appointment booking unchanged."
@@ -1343,13 +1833,22 @@ class Service:
             done = ex.get("test_completed")
             if done is True:
                 outcome = "test_completion_reported"
-                next_action = f"Check lab for {test} report"
                 if task.get("test_tracking") is not None:
-                    task["test_tracking"]["test_completion_reported"] = True  # report_received / clinician_reviewed untouched
+                    task["test_tracking"]["test_completion_reported"] = True
+                window = (ex.get("callback_window") or "").strip() or None
+                if window:
+                    task["callback_window"] = window
+                new_status, next_action = "awaiting_staff_action", (
+                    f"Book follow-up visit — {window}" if window else "Book follow-up visit (preference captured on call)"
+                )
                 when = ex.get("test_date")
-                result_msg = (f"Test completion reported by patient{f' ({when})' if when else ''}. Report not yet received; "
-                              "clinician review pending. Task moved to awaiting_staff_action.")
-                extracted_msg = f"Patient reports {test} test done" + (f" — {when}" if when else "")
+                result_msg = (
+                    f"Patient reports {test} is done{f' ({when})' if when else ''}. "
+                    "Follow-up visit preference captured on the same call; no separate scheduling call queued."
+                )
+                extracted_msg = f"Patient reports {test} done" + (f" — {when}" if when else "")
+                if window:
+                    extracted_msg += f"; follow-up around {window}"
             elif done is False:
                 outcome = "test_not_done"
                 new_status, next_action = "pending", "Remind again in 2 days"
@@ -1424,16 +1923,21 @@ class Service:
         self.add_event("call", call["call_id"], pid, "call_completed", f"Call completed — {headline}", actor)
         self.add_event("task", task["task_id"], pid, "outcome_extracted", extracted_msg or "Outcome recorded", "system")
         if appt is not None and wf == "appointment_confirmation":
-            self.add_event("appointment", appt["appointment_id"], pid, "outcome_extracted",
-                           f"Confirmation recorded as {label(appt['confirmation_state'])} — booking unchanged", "system")
+            if auto_rescheduled_booking:
+                appt_msg = f"Visit rescheduled to {timeutil.human(appt['scheduled_at'])} — confirmation pending"
+            else:
+                appt_msg = f"Confirmation recorded as {label(appt['confirmation_state'])} — booking unchanged"
+            self.add_event("appointment", appt["appointment_id"], pid, "outcome_extracted", appt_msg, "system")
         if escalation:
             self.add_event("escalation", escalation["escalation_id"], pid, "escalation_created",
                            f"Escalation created — routed to {escalation['routing_destination']}", "system")
         self._set_task_status(task, new_status)
 
-        if callback_requested:
+        skip_callback_spawn = wf == "test_report_reminder" and outcome == "test_completion_reported"
+        if callback_requested and not auto_rescheduled_booking and not skip_callback_spawn:
             cb = self._create_callback_task(task, ex.get("callback_window"))
             task["spawned_followup_task_id"] = cb["task_id"]
+            self._enqueue_auto_dial(cb["task_id"])
             # Do not override clinical next steps (e.g. open escalation) when callback is secondary.
             if not escalation:
                 if cb.get("callback_window"):
@@ -1519,13 +2023,39 @@ class Service:
             }
         if not cb.get("source_task_id"):
             cb["source_task_id"] = source["task_id"]
+        from_test = source.get("task_type") == "test_report_reminder"
         if window:
             cb["title"] = f"Schedule appointment — {window}"
             cb["callback_window"] = window
-            cb["next_action"] = f"Call patient to confirm slot — {window}"
-            cb["purpose"] = (
-                f"Patient requested an appointment on {window} during {source['title']}. "
-                "Confirm time with patient; do not book in Jiya."
+            cb["next_action"] = (
+                f"Jiya will call to confirm follow-up visit — {window}"
+                if self.settings.clinic_auto_dial_followups_enabled and self.settings.live_voice
+                else f"Call patient to confirm slot — {window}"
+            )
+            if from_test:
+                cb["purpose"] = (
+                    f"Patient completed the test (from {source['title']}) and prefers a follow-up visit around {window}."
+                )
+                cb["call_context"] = (
+                    "Earlier call: patient confirmed the lab test is done (no report collected). "
+                    f"They suggested {window} for a follow-up visit. Confirm a suitable slot; do not collect report details."
+                )
+            else:
+                cb["purpose"] = (
+                    f"Patient requested an appointment on {window} during {source['title']}. "
+                    "Confirm time with patient; do not book in Jiya."
+                )
+        elif from_test:
+            cb["title"] = "Schedule follow-up after test"
+            cb["purpose"] = f"Patient completed the test (from {source['title']}). Schedule a follow-up visit."
+            cb["call_context"] = (
+                "Earlier call: patient confirmed the lab test is done. Ask when they can come in for a follow-up visit. "
+                "Do not ask for report values or photos."
+            )
+            cb["next_action"] = (
+                "Jiya call queued — schedule follow-up visit"
+                if self.settings.clinic_auto_dial_followups_enabled and self.settings.live_voice
+                else "Call patient to schedule follow-up visit (test completed)"
             )
         cb["updated_at"] = timeutil.iso(now)
         self.store.save("tasks", cb)
@@ -1567,8 +2097,12 @@ class Service:
             parts = [f"Jiya could not confirm whether {name} will attend."]
         elif outcome == "test_completion_reported":
             when = ex.get("test_date")
-            parts = [f"{name} says the test has been done" + (f" ({when})." if when else "."),
-                     "The clinic has not yet received the report."]
+            window = ex.get("callback_window")
+            parts = [f"{name} says the test has been done" + (f" ({when})." if when else ".")]
+            if window:
+                parts.append(f"Follow-up visit preference on this call: {window}.")
+            else:
+                parts.append("Front desk will book a follow-up visit from the call.")
         elif outcome == "test_not_done":
             parts = [f"{name} has not done the test yet; a reminder will follow."]
         elif outcome == "routine_ok":
@@ -1593,15 +2127,23 @@ class Service:
         contact_permitted: bool = True,
         chart_number: str | None = None,
         age: int | None = None,
+        gender: str | None = None,
     ) -> dict:
         name = display_name.strip()
-        phone = phone_e164.strip()
+        phone = normalize_e164(phone_e164)
         if not name:
             raise ApiError(422, "validation_error", "Patient name is required.", False)
         if not _E164.match(phone):
-            raise ApiError(422, "validation_error", "Phone must be E.164 format (e.g. +919876543210).", False)
+            raise ApiError(
+                422,
+                "validation_error",
+                "Enter a valid mobile with country code (e.g. +91 and 10 digits for India). Spaces are removed automatically.",
+                False,
+            )
         if language not in ("hi", "en", "hinglish"):
             raise ApiError(422, "validation_error", "Language must be hi, en, or hinglish.", False)
+        age = normalize_patient_age(age)
+        gender = normalize_patient_gender(gender)
         now = timeutil.now_iso()
         seq = len(self.store.all("patients")) + 1
         patient = {
@@ -1609,6 +2151,7 @@ class Service:
             "display_name": name,
             "demo_id": chart_number.strip() if chart_number else f"P-{seq:04d}",
             "age": age,
+            "gender": gender,
             "language": language,
             "contact_ref": f"phone-{seq}",
             "phone_e164": phone,
@@ -1704,6 +2247,17 @@ class Service:
             appt["task_id"] = task["task_id"]
             self.store.save("appointments", appt)
         self.add_event("task", task["task_id"], patient_id, "task_created", f"Follow-up created — {task['title']}", "staff")
+        if (
+            self.settings.clinic_auto_dial_followups_enabled
+            and self.settings.live_voice
+            and task_type != "appointment_confirmation"
+        ):
+            eligible, _ = self.eligibility(task)
+            if eligible:
+                self._enqueue_auto_dial(task["task_id"])
+                task["next_action"] = "Jiya call queued — automated outbound"
+                task["updated_at"] = timeutil.now_iso()
+                self.store.save("tasks", task)
         return {"task": self.task_out(task)}
 
     def create_appointment(
@@ -1731,18 +2285,8 @@ class Service:
         self.store.save("appointments", appt)
         task_out = None
         if spawn_confirmation_task:
-            batch_time = parse_batch_time(self.settings.clinic_confirmation_batch_time)
             appt_dt = _ts(scheduled_at)
-            if self.settings.clinic_daily_confirmation_batch_enabled:
-                due_at = timeutil.iso(confirmation_call_moment(appt_dt, batch_time))
-                next_action = (
-                    f"Automatic confirmation call on "
-                    f"{confirmation_call_moment(appt_dt, batch_time).strftime('%d %b at %I:%M %p').lstrip('0')} "
-                    f"(day before visit)"
-                )
-            else:
-                due_at = timeutil.iso(appt_dt - timedelta(hours=24))
-                next_action = "Start follow-up call"
+            due_at, next_action = self._confirmation_task_due(appt_dt)
             task = {
                 "task_id": new_id("task"),
                 "patient_id": patient_id,
@@ -1799,9 +2343,9 @@ class Service:
                 raise ApiError(422, "validation_error", "Patient name cannot be empty.", False)
             patient["display_name"] = name
         if "phone_e164" in fields and fields["phone_e164"] is not None:
-            phone = str(fields["phone_e164"]).strip()
+            phone = normalize_e164(str(fields["phone_e164"]))
             if not _E164.match(phone):
-                raise ApiError(422, "validation_error", "Phone must be E.164 format.", False)
+                raise ApiError(422, "validation_error", "Enter a valid mobile with country code.", False)
             patient["phone_e164"] = phone
             patient["phone_masked"] = self._mask_phone(phone)
         if "language" in fields and fields["language"] is not None:
@@ -1813,7 +2357,9 @@ class Service:
         if "chart_number" in fields and fields["chart_number"] is not None:
             patient["demo_id"] = str(fields["chart_number"]).strip() or patient.get("demo_id")
         if "age" in fields:
-            patient["age"] = fields["age"]
+            patient["age"] = normalize_patient_age(fields["age"]) if fields["age"] is not None else None
+        if "gender" in fields:
+            patient["gender"] = normalize_patient_gender(fields["gender"]) if fields["gender"] is not None else None
         self.store.save("patients", patient)
         self.add_event(
             "patient", patient_id, patient_id, "staff_action_recorded",
@@ -1962,7 +2508,10 @@ class Service:
         elif task.get("task_type") == "test_report_reminder" and prepared.get("test_completed") is False:
             summary = "Patient has not completed the test yet."
         elif task.get("task_type") == "test_report_reminder" and prepared.get("test_completed") is True:
+            window = prepared.get("callback_window")
             summary = "Patient reports the test is done."
+            if window:
+                summary += f" Prefers follow-up around {window}."
         else:
             summary = call.get("summary")
         call["summary"] = summary

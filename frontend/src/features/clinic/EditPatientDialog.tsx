@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError, type Patient } from '@/api'
+import { ModalOverlay } from '@/components/ModalOverlay'
 import { Button, ErrorBanner } from '@/components/ui'
+import type { PatientGender } from '@/api/types'
+import { PatientDemographicsFields, parseAgeField } from '@/features/clinic/patientDemographicsFields'
+import { composeE164, PhoneMobileFields } from '@/features/clinic/phoneField'
 
 type Props = {
   open: boolean
@@ -11,7 +15,11 @@ type Props = {
 
 export function EditPatientDialog({ open, patient, onClose, onSaved }: Props) {
   const [displayName, setDisplayName] = useState(patient.display_name)
-  const [phone, setPhone] = useState('')
+  const [countryDial, setCountryDial] = useState('+91')
+  const [localPhone, setLocalPhone] = useState('')
+  const [changePhone, setChangePhone] = useState(false)
+  const [age, setAge] = useState(patient.age != null ? String(patient.age) : '')
+  const [gender, setGender] = useState<PatientGender | ''>(patient.gender ?? '')
   const [language, setLanguage] = useState(patient.language)
   const [consent, setConsent] = useState(patient.contact_permitted)
   const [error, setError] = useState<string | null>(null)
@@ -19,9 +27,13 @@ export function EditPatientDialog({ open, patient, onClose, onSaved }: Props) {
 
   useEffect(() => {
     setDisplayName(patient.display_name)
+    setAge(patient.age != null ? String(patient.age) : '')
+    setGender(patient.gender ?? '')
     setLanguage(patient.language)
     setConsent(patient.contact_permitted)
-    setPhone('')
+    setLocalPhone('')
+    setChangePhone(false)
+    setCountryDial('+91')
   }, [patient])
 
   if (!open) return null
@@ -31,12 +43,17 @@ export function EditPatientDialog({ open, patient, onClose, onSaved }: Props) {
     setLoading(true)
     setError(null)
     try {
+      const parsedAge = parseAgeField(age)
       const patch: Record<string, unknown> = {
         display_name: displayName.trim(),
         language,
         contact_permitted: consent,
+        age: parsedAge ?? null,
+        gender: gender || null,
       }
-      if (phone.trim()) patch.phone_e164 = phone.trim()
+      if (changePhone && localPhone.replace(/\D/g, '').length > 0) {
+        patch.phone_e164 = composeE164(countryDial, localPhone)
+      }
       await api.updatePatient(patient.patient_id, patch)
       onSaved()
       onClose()
@@ -48,8 +65,8 @@ export function EditPatientDialog({ open, patient, onClose, onSaved }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/40 p-4 backdrop-blur-sm">
-      <form onSubmit={submit} className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+    <ModalOverlay onBackdropClick={onClose}>
+      <form onSubmit={submit} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <h2 className="text-lg font-medium text-navy-900">Edit patient</h2>
         {error && (
           <div className="mt-3">
@@ -60,10 +77,27 @@ export function EditPatientDialog({ open, patient, onClose, onSaved }: Props) {
           Full name
           <input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
         </label>
-        <label className="mt-3 block text-sm font-medium text-slate-700">
-          New phone (E.164, optional)
-          <input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-mono" placeholder={patient.phone_masked} value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </label>
+        <div className="mt-3">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={changePhone} onChange={(e) => setChangePhone(e.target.checked)} />
+            Update mobile number <span className="text-slate-400">(currently {patient.phone_masked})</span>
+          </label>
+          {changePhone && (
+            <PhoneMobileFields
+              countryDial={countryDial}
+              localNumber={localPhone}
+              onCountryDial={setCountryDial}
+              onLocalNumber={setLocalPhone}
+            />
+          )}
+        </div>
+        <PatientDemographicsFields
+          age={age}
+          gender={gender}
+          onAge={setAge}
+          onGender={setGender}
+          inputClassName="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+        />
         <label className="mt-3 block text-sm font-medium text-slate-700">
           Language
           <select className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" value={language} onChange={(e) => setLanguage(e.target.value as typeof language)}>
@@ -85,6 +119,6 @@ export function EditPatientDialog({ open, patient, onClose, onSaved }: Props) {
           </Button>
         </div>
       </form>
-    </div>
+    </ModalOverlay>
   )
 }

@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { api, ApiError } from '@/api'
+import { ModalOverlay } from '@/components/ModalOverlay'
 import { Button, ErrorBanner } from '@/components/ui'
+import { PatientDemographicsFields, parseAgeField } from '@/features/clinic/patientDemographicsFields'
+import { composeE164, PhoneMobileFields } from '@/features/clinic/phoneField'
+import type { PatientGender } from '@/api/types'
 
 type Props = {
   open: boolean
@@ -10,7 +14,10 @@ type Props = {
 
 export function CreatePatientDialog({ open, onClose, onCreated }: Props) {
   const [displayName, setDisplayName] = useState('')
-  const [phone, setPhone] = useState('')
+  const [countryDial, setCountryDial] = useState('+91')
+  const [localPhone, setLocalPhone] = useState('')
+  const [age, setAge] = useState('')
+  const [gender, setGender] = useState<PatientGender | ''>('')
   const [language, setLanguage] = useState<'hi' | 'en' | 'hinglish'>('hinglish')
   const [consent, setConsent] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -23,14 +30,20 @@ export function CreatePatientDialog({ open, onClose, onCreated }: Props) {
     setLoading(true)
     setError(null)
     try {
+      const phone_e164 = composeE164(countryDial, localPhone)
+      const parsedAge = parseAgeField(age)
       await api.createPatient({
         display_name: displayName.trim(),
-        phone_e164: phone.trim(),
+        phone_e164,
         language,
         contact_permitted: consent,
+        ...(parsedAge != null ? { age: parsedAge } : {}),
+        ...(gender ? { gender } : {}),
       })
       setDisplayName('')
-      setPhone('')
+      setLocalPhone('')
+      setAge('')
+      setGender('')
       onCreated()
       onClose()
     } catch (err) {
@@ -41,19 +54,26 @@ export function CreatePatientDialog({ open, onClose, onCreated }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/40 p-4 backdrop-blur-sm">
-      <form onSubmit={submit} className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+    <ModalOverlay onBackdropClick={onClose}>
+      <form autoComplete="off" onSubmit={submit} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <h2 className="text-lg font-medium text-navy-900">Register patient</h2>
-        <p className="mt-1 text-sm text-slate-600">Real mobile number (E.164). Jiya will call this number for follow-ups.</p>
         {error && <div className="mt-3"><ErrorBanner error={error} /></div>}
         <label className="mt-4 block text-sm font-medium text-slate-700">
           Full name
           <input required className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         </label>
         <label className="mt-3 block text-sm font-medium text-slate-700">
-          Mobile (E.164)
-          <input required placeholder="+919876543210" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          Mobile number
+          <PhoneMobileFields
+            countryDial={countryDial}
+            localNumber={localPhone}
+            onCountryDial={setCountryDial}
+            onLocalNumber={setLocalPhone}
+            localPlaceholder="Enter mobile number"
+            autoComplete="off"
+          />
         </label>
+        <PatientDemographicsFields age={age} gender={gender} onAge={setAge} onGender={setGender} />
         <label className="mt-3 block text-sm font-medium text-slate-700">
           Preferred language
           <select className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" value={language} onChange={(e) => setLanguage(e.target.value as typeof language)}>
@@ -71,6 +91,6 @@ export function CreatePatientDialog({ open, onClose, onCreated }: Props) {
           <Button type="submit" loading={loading}>Save patient</Button>
         </div>
       </form>
-    </div>
+    </ModalOverlay>
   )
 }

@@ -31,7 +31,8 @@ class Settings:
     clinic_demo_seed_enabled: bool = False
     clinic_allow_workspace_reset: bool = False
     clinic_daily_confirmation_batch_enabled: bool = False
-    clinic_confirmation_batch_time: str = "10:00"
+    clinic_auto_dial_followups_enabled: bool = True
+    clinic_confirmation_batch_time: str = "16:00"
     clinic_cron_secret: str | None = None
     bolna_api_key: str | None = None
     bolna_agent_id: str | None = None
@@ -112,6 +113,11 @@ class Settings:
             if mode == "clinic"
             else False,
             clinic_confirmation_batch_time=_env("CLINIC_CONFIRMATION_BATCH_TIME") or "10:00",
+            clinic_auto_dial_followups_enabled=(
+                (_env("CLINIC_AUTO_DIAL_FOLLOWUPS") or "true").strip().lower() in ("1", "true", "yes")
+                if mode == "clinic"
+                else False
+            ),
             clinic_cron_secret=_env("CLINIC_CRON_SECRET"),
             auto_dial_interval_seconds=float(_env("AUTO_DIAL_INTERVAL_SECONDS") or 120),
             clinic_dial_override_e164=_env("CLINIC_DIAL_OVERRIDE_E164"),

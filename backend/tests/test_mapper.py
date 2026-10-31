@@ -61,6 +61,22 @@ def test_transcript_overrides_wrong_test_completed():
     assert prepared["test_completed"] is False
 
 
+def test_jiya_reminder_acknowledged_does_not_mean_test_done():
+    jiya = {"call_outcome": "reminder_acknowledged", "follow_up_required": "no", "patient_feeling": "same"}
+    contract, _ = JiyaExtractionMapper.map("test_report_reminder", jiya)
+    assert contract.get("test_completed") is not True
+
+
+def test_jiya_reminder_ack_plus_transcript_not_done():
+    jiya = {"call_outcome": "reminder_acknowledged", "callback_requested": "no"}
+    transcript = [
+        {"role": "agent", "text": "Have you completed the lipid profile?"},
+        {"role": "patient", "text": "Not yet, I haven't had time."},
+    ]
+    prepared, _ = prepare_extracted_for_task("test_report_reminder", jiya, transcript=transcript)
+    assert prepared["test_completed"] is False
+
+
 def test_prepare_jiya_merges_storage_keys():
     jiya = {"call_outcome": "appointment_confirmed", "callback_requested": "no"}
     prepared, _ = prepare_extracted_for_task("appointment_confirmation", jiya)

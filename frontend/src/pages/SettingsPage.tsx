@@ -43,9 +43,7 @@ export default function SettingsPage() {
       <PageHeader
         title="Settings"
         subtitle={
-          APP_MODE === 'clinic' ? (
-            'Exports and training data for your clinic workspace.'
-          ) : (
+          APP_MODE === 'clinic' ? undefined : (
             <span className="inline-flex flex-wrap items-center gap-2">
               Read-only view of the demo configuration. <DemoBadge>Prototype</DemoBadge>
             </span>

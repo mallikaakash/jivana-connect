@@ -47,3 +47,7 @@ def test_dashboard_inbox_split_and_meta():
         assert len(ops) >= 1
         assert ops[0]["kind"] == "callback_request"
         assert ops[0]["audience"] == "operations"
+
+        queued = client.get("/api/tasks", params={"queue": "operations"}).json()["items"]
+        assert len(queued) == len(ops)
+        assert {t["task_id"] for t in queued} == {i["task_id"] for i in ops}

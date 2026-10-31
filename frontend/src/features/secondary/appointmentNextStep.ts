@@ -5,7 +5,10 @@ import type { Appointment } from '@/api'
  * `booking_status` is owned by the booking system, and a call cannot alter it.
  */
 export function appointmentNextStep(appt: Pick<Appointment, 'booking_status' | 'confirmation_state'>): string {
-  if (appt.booking_status === 'cancelled') return 'None — booking cancelled'
+  if (appt.booking_status === 'cancelled') {
+    if (appt.confirmation_state === 'rescheduling_requested') return 'Prior booking — see rescheduled visit below'
+    return 'None — visit cancelled'
+  }
   if (appt.booking_status === 'completed') return 'None — visit completed'
   switch (appt.confirmation_state) {
     case 'pending':

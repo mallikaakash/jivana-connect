@@ -13,16 +13,23 @@ import SettingsPage from '@/pages/SettingsPage'
 import TaskDetailPage from '@/pages/TaskDetailPage'
 import TasksPage from '@/pages/TasksPage'
 import BatchesPage from '@/pages/BatchesPage'
+import LandingPage from '@/pages/LandingPage'
 import { ClinicDeskOnlyRoute } from '@/features/clinic/ClinicDeskOnlyRoute'
 import { ClinicAuthGate } from '@/features/clinic/ClinicAuthGate'
 
 export default function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <ClinicAuthGate>
       <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<OverviewPage />} />
+        <Route path="/" element={<LandingPage />} />
+        <Route
+          element={
+            <ClinicAuthGate>
+              <Layout />
+            </ClinicAuthGate>
+          }
+        >
+          <Route path="today" element={<OverviewPage />} />
           <Route path="patients" element={<PatientsPage />} />
           <Route path="patients/:patientId" element={<PatientDetailPage />} />
           <Route element={<ClinicDeskOnlyRoute />}>
@@ -39,7 +46,6 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
-      </ClinicAuthGate>
     </BrowserRouter>
   )
 }

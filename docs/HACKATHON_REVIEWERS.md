@@ -2,19 +2,18 @@
 
 **Live app:** https://project-bf77a013-c0b3-413c-a75.web.app
 
-## How reviewers sign in (no Google needed)
+## How reviewers enter (no sign-in)
 
 1. Open the link above.
-2. On **Staff sign-in**, use the yellow **Hackathon & demo reviewers** box (access key is shown on the page).
-3. Click **Fill access key for me**, then **Continue to dashboard**.
-4. If **Today** looks empty, click **Load demo data** (or open **Settings → Demo data for reviewers**). Sample patients, call transcripts, and escalations appear instantly — no live call needed.
-5. Use the header toggle **Front desk** vs **Doctor** to see both workflows.
+2. Click **Open clinic workspace** on the landing page (demo access is applied automatically).
+3. If **Today** looks empty, click **Load demo data** (or open **Settings → Demo data for reviewers**). Sample patients, call transcripts, and escalations appear instantly — no live call needed.
+4. Use the header toggle **Front desk** vs **Doctor** to see both workflows.
 
 You can paste this block into your submission form:
 
 ```text
 Demo URL: https://project-bf77a013-c0b3-413c-a75.web.app
-Sign-in: Open the URL → copy the demo access key from the yellow box on the sign-in screen → Continue to dashboard. Google sign-in is optional.
+Entry: Open the URL → **Open clinic workspace** on the landing page (no login).
 Try: Front desk — register a patient, book appointment, Tasks → Start Jiya call. Doctor — Clinical inbox and resolve an escalation.
 ```
 

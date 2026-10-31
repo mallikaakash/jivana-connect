@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError, type PatientListItem } from '@/api'
+import { ModalOverlay } from '@/components/ModalOverlay'
 import { Button, ErrorBanner } from '@/components/ui'
 
 type Props = {
@@ -54,10 +55,9 @@ export function CreateAppointmentDialog({ open, defaultPatientId, onClose, onCre
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/40 p-4 backdrop-blur-sm">
-      <form onSubmit={submit} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+    <ModalOverlay onBackdropClick={onClose}>
+      <form onSubmit={submit} className="max-h-[85dvh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <h2 className="text-lg font-medium text-navy-900">Book appointment</h2>
-        <p className="mt-1 text-sm text-slate-600">Creates the visit and optionally a Jiya confirmation call task.</p>
         {error && (
           <div className="mt-3">
             <ErrorBanner error={error} />
@@ -90,7 +90,7 @@ export function CreateAppointmentDialog({ open, defaultPatientId, onClose, onCre
         </label>
         <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" checked={spawnTask} onChange={(e) => setSpawnTask(e.target.checked)} />
-          Schedule Jiya confirmation call (due day before visit)
+          Schedule Jiya confirmation call (day before visit, ~4:00 PM IST)
         </label>
         <div className="mt-6 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
@@ -101,6 +101,6 @@ export function CreateAppointmentDialog({ open, defaultPatientId, onClose, onCre
           </Button>
         </div>
       </form>
-    </div>
+    </ModalOverlay>
   )
 }

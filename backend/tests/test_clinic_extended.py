@@ -14,6 +14,18 @@ def _clinic_client(**overrides):
     return TestClient(app)
 
 
+def test_create_patient_age_and_gender():
+    c = _clinic_client(clinic_api_key=None, mongo_url=None)
+    p = c.post(
+        "/api/patients",
+        json={"display_name": "A", "phone_e164": "+919900000001", "age": 42, "gender": "female"},
+    ).json()["patient"]
+    assert p["age"] == 42
+    assert p["gender"] == "female"
+    bad = c.post("/api/patients", json={"display_name": "B", "phone_e164": "+919900000002", "age": 200})
+    assert bad.status_code == 422
+
+
 def test_update_patient_and_appointment():
     c = _clinic_client(clinic_api_key=None, mongo_url=None)
     p = c.post("/api/patients", json={"display_name": "A", "phone_e164": "+919900000001"}).json()["patient"]

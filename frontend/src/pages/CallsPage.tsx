@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, APP_MODE, CALL_STATUSES, type Call, type CallStatus, type WithPatientName } from '@/api'
-import { useStaffRole } from '@/features/clinic/workspace'
 import { DataTable, type Column } from '@/components/DataTable'
 import { Card, DemoBadge, PageHeader, StatusBadge } from '@/components/ui'
+import { CLINIC_HELP } from '@/features/clinic/helpCopy'
 import { isActiveCall } from '@/features/secondary/helpers'
 import { FilterSelect, LoadGate, RefreshError, TextLink, VoiceModeBadge } from '@/features/secondary/common'
 import { formatDateTime, label, outcomeLabel } from '@/lib/format'
@@ -16,11 +16,20 @@ type ViewFilter = 'all' | 'clinical'
 const columns = (clinic: boolean): Column<Row>[] => [
   ...(clinic
     ? []
-    : [{ key: 'id', header: 'Call ID', className: 'whitespace-nowrap', render: (c: Row) => <span className="font-mono text-xs text-slate-600">{c.call_id}</span> }]),
-  { key: 'patient', header: 'Patient', render: (c) => <TextLink to={`/patients/${c.patient_id}`}>{c.patient_name}</TextLink> },
+    : [
+        {
+          key: 'id',
+          header: 'Call ID',
+          className: 'whitespace-nowrap',
+          sortValue: (c: Row) => c.call_id,
+          render: (c: Row) => <span className="font-mono text-xs text-slate-600">{c.call_id}</span>,
+        },
+      ]),
+  { key: 'patient', header: 'Patient', sortValue: (c) => c.patient_name, render: (c) => <TextLink to={`/patients/${c.patient_id}`}>{c.patient_name}</TextLink> },
   {
     key: 'purpose',
     header: 'Purpose / workflow',
+    sortValue: (c) => c.purpose,
     render: (c) => (
       <div>
         <div className="text-slate-800">{c.purpose}</div>
@@ -32,6 +41,7 @@ const columns = (clinic: boolean): Column<Row>[] => [
     key: 'time',
     header: 'Started / completed',
     className: 'whitespace-nowrap',
+    sortValue: (c) => c.started_at ?? c.created_at,
     render: (c) => (
       <div className="text-xs">
         <div>
@@ -45,10 +55,11 @@ const columns = (clinic: boolean): Column<Row>[] => [
       </div>
     ),
   },
-  { key: 'status', header: 'Call status', render: (c) => <StatusBadge value={c.status} /> },
+  { key: 'status', header: 'Call status', sortValue: (c) => c.status, render: (c) => <StatusBadge value={c.status} /> },
   {
     key: 'outcome',
     header: 'Outcome',
+    sortValue: (c) => c.outcome ?? '',
     render: (c) =>
       c.outcome ? <StatusBadge value={c.outcome} text={outcomeLabel(c.outcome, clinic)} /> : <span className="text-slate-400">—</span>,
   },
@@ -58,7 +69,6 @@ const columns = (clinic: boolean): Column<Row>[] => [
 
 export default function CallsPage() {
   const navigate = useNavigate()
-  const [staffRole] = useStaffRole()
   const clinic = APP_MODE === 'clinic'
   const [status, setStatus] = useState<StatusFilter>('all')
   const [view, setView] = useState<ViewFilter>('all')
@@ -77,18 +87,15 @@ export default function CallsPage() {
     pollMs,
   )
 
-  const rows = [...(data?.items ?? [])].sort((a, b) => (b.started_at ?? b.created_at).localeCompare(a.started_at ?? a.created_at))
+  const rows = data?.items ?? []
 
   return (
     <div>
       <PageHeader
         title="Calls"
+        info={clinic ? CLINIC_HELP.callsPage : undefined}
         subtitle={
-          clinic ? (
-            staffRole === 'doctor'
-              ? 'Call history and transcripts. Filter to calls flagged for clinical review when a concern is open.'
-              : 'Every Jiya call to a patient number. Call status is separate from the follow-up task.'
-          ) : (
+          clinic ? undefined : (
             <span className="inline-flex flex-wrap items-center gap-2">
               Every Jiya call attempt. Call status is separate from the follow-up task's status. <DemoBadge />
             </span>
@@ -121,6 +128,7 @@ export default function CallsPage() {
           <DataTable
             columns={columns(clinic)}
             rows={rows}
+            defaultSort={{ key: 'time', direction: 'desc' }}
             rowKey={(c) => c.call_id}
             onRowClick={(c) => navigate(`/calls/${c.call_id}`)}
             emptyTitle={view === 'clinical' ? 'No calls flagged for clinical review' : 'No calls yet'}

@@ -22,7 +22,7 @@ IDs are strings like `patient_demo_001`, `task_demo_001`.
 | `EscalationAction` | `acknowledge`, `assign`, `add_note`, `resolve` |
 | `EscalationResolutionType` | `called_patient`, `advised_come_in`, `not_clinical`, `referred_elsewhere`, `admin_handled` |
 | `CallOutcome` | every `AppointmentOutcome` value, plus `test_completion_reported`, `test_not_done`, `routine_ok`, `concern_reported`, `task_acknowledged`, `callback_requested` |
-| `AttentionStatus` (patient, derived) | `ok`, `needs_attention`, `urgent` |
+| `AttentionStatus` (patient, derived) | `ok`, `needs_attention`, `urgent` — UI labels: *No follow-up flags*, *Follow-up required*, *Priority review* |
 | `EventType` | `task_created`, `call_started`, `call_completed`, `call_no_answer`, `call_failed`, `outcome_extracted`, `task_status_changed`, `escalation_created`, `escalation_updated`, `staff_action_recorded`, `callback_task_created` |
 | `Actor` | `system`, `jiya`, `staff`, `bolna_webhook`, `simulator` |
 
@@ -43,6 +43,7 @@ Patient {
   display_name: string          // synthetic name, e.g. "Asha Verma"
   demo_id: string               // e.g. "JC-1001"
   age: number | null
+  gender: "female" | "male" | "other" | "prefer_not_to_say" | null
   language: "hi" | "en" | "hinglish"
   contact_ref: string           // safe reference, e.g. "demo-contact-01" — never a real number
   phone_masked: string          // e.g. "+91 98xxx xx101"
@@ -170,11 +171,11 @@ List endpoints add `patient_name: string` to each Task, Call, Appointment and Es
 | Workflow / result | Call | Task | Other effects |
 |---|---|---|---|
 | appt `confirmed` | completed | `completed`, next_action "No action needed" | appointment.confirmation_state = confirmed; booking_status unchanged |
-| appt `rescheduling_requested` | completed | `awaiting_staff_action`, next_action "Call patient to offer a new slot (prefers …)" | confirmation_state = rescheduling_requested; **booking_status and scheduled_at unchanged** |
+| appt `rescheduling_requested` | completed | If a concrete new day is parsed from `preferred_reschedule_window`, `callback_window`, or linked callback task: **original appointment** `booking_status = cancelled` (same `scheduled_at`, kept on calendar); **new appointment** created on the new day with confirmation pending; confirmation task repointed and re-queued. Otherwise: `awaiting_staff_action`; booking unchanged |
 | appt `declined` | completed | `awaiting_staff_action`, "Review cancellation with patient" | confirmation_state = declined |
 | appt `unable_to_confirm` | completed | `awaiting_staff_action` | confirmation_state = unable_to_confirm |
 | no answer (any workflow) | no_answer | attempt_count+1; `due` with "Retry call" if attempts < 3, else `awaiting_staff_action` | appt confirmation_state = no_answer |
-| test `test_completed=true` | completed | `awaiting_staff_action`, "Check lab for <test> report" | test_completion_reported = true; report_received/clinician_reviewed untouched |
+| test `test_completed=true` | completed | `awaiting_staff_action`, book follow-up visit (`callback_window` on same task when given on call) | test_completion_reported = true; no report collected; no separate scheduling call |
 | test `test_completed=false` | completed | `pending`, "Remind again in 2 days" | — |
 | post-procedure `routine_ok` | completed | `completed` | — |
 | post-procedure `concern_reported` | completed | `awaiting_staff_action`, "Review escalated concern" | create Escalation (open, high), link to call + task |
@@ -243,7 +244,7 @@ Lists return `{ "items": [...] }`.
 | `GET /api/patients?q=&attention_status=` | `{ items: (Patient & { next_appointment_at: string\|null, open_followups: number, last_contact_at: string\|null })[] }` |
 | `GET /api/patients/{id}` | `{ patient, appointments, tasks, calls, escalations, events }` |
 | `GET /api/appointments` | `{ items: Appointment&{patient_name}[] }` |
-| `GET /api/tasks?status=&task_type=&priority=&patient_id=&due=overdue\|today\|upcoming` | `{ items: Task&{patient_name}[] }` |
+| `GET /api/tasks?status=&task_type=&priority=&patient_id=&due=overdue\|today\|upcoming&queue=operations\|clinical\|followups_due\|open\|history` | `{ items: Task&{patient_name}[] }` — `queue` matches dashboard inbox / `followups_due_count`; `open` = non-terminal tasks |
 | `GET /api/tasks/{id}` | `{ task, patient, appointment: Appointment\|null, calls: Call[], events: Event[] }` |
 | `POST /api/tasks/{id}/start-call` | `202 { call, task }` · `409` not eligible · `502` provider error (task preserved) |
 | `POST /api/tasks/{id}/cancel` | `{ task }` · `409` if terminal or call in progress |

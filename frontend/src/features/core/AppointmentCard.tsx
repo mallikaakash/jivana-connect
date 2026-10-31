@@ -11,21 +11,28 @@ const CONFIRMATION_NOTES: Partial<Record<Appointment['confirmation_state'], stri
 }
 
 /** Booking status (booking system) and confirmation state (from Jiya's call) are shown as separate facts. */
-export function AppointmentCard({ appointment }: { appointment: Appointment }) {
+export function AppointmentCard({ appointment, compact }: { appointment: Appointment; compact?: boolean }) {
   const note = CONFIRMATION_NOTES[appointment.confirmation_state]
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
-          <CalendarClock className="h-5 w-5" />
-        </span>
-        <div className="min-w-0">
-          <p className="font-medium text-navy-800">{formatDateTime(appointment.scheduled_at)}</p>
-          <p className="text-xs text-slate-500">
-            {relativeTime(appointment.scheduled_at)} · {appointment.department} · {appointment.clinician}
-          </p>
+      {!compact && (
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+            <CalendarClock className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="font-medium text-navy-800">{formatDateTime(appointment.scheduled_at)}</p>
+            <p className="text-xs text-slate-500">
+              {relativeTime(appointment.scheduled_at)} · {appointment.department} · {appointment.clinician}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
+      {compact && (
+        <p className="text-xs text-slate-500">
+          {relativeTime(appointment.scheduled_at)} · {appointment.department} · {appointment.clinician}
+        </p>
+      )}
       <dl className="divide-y divide-slate-100 rounded-xl border border-slate-200">
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
           <dt>

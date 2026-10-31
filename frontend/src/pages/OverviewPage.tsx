@@ -7,8 +7,9 @@ import { Timeline } from '@/components/Timeline'
 import { Button, Card, DemoBadge, EmptyState, ErrorBanner, LoadingState, PageHeader, StatusBadge, SummaryCard } from '@/components/ui'
 import { ClinicDemoSeedPanel } from '@/features/clinic/ClinicDemoSeedPanel'
 import { useStaffRole } from '@/features/clinic/workspace'
-import { formatDateTime, formatTime, label, outcomeLabel, relativeTime, type Tone } from '@/lib/format'
+import { formatDateTime, formatTime, label, outcomeLabel, relativeTime, taskStatusLabel, type Tone } from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
+import { CLINIC_HELP } from '@/features/clinic/helpCopy'
 import { CallModeBadge } from '@/features/core/CallModeBadge'
 import { isCallActive, isTaskOverdue } from '@/features/core/helpers'
 
@@ -48,24 +49,20 @@ export default function OverviewPage() {
     isClinic && meta.data?.demo_seed_available && data !== undefined && data.patients_count === 0
 
   const subtitle = useMemo(() => {
-    if (!isClinic) {
-      return (
-        <span className="inline-flex flex-wrap items-center gap-2">
-          What needs attention today, what Jiya completed, and what needs a human. <DemoBadge>DEMO DATA</DemoBadge>
-        </span>
-      )
-    }
-    if (staffRole === 'doctor') {
-      return 'Clinical inbox first — patient questions and concerns that need your judgment.'
-    }
-    return 'Operations queue — follow-ups to place, reschedules, callbacks, and overdue items.'
-  }, [isClinic, staffRole])
+    if (isClinic) return undefined
+    return (
+      <span className="inline-flex flex-wrap items-center gap-2">
+        What needs attention today, what Jiya completed, and what needs a human. <DemoBadge>DEMO DATA</DemoBadge>
+      </span>
+    )
+  }, [isClinic])
 
   return (
     <div>
       <PageHeader
-        title={isClinic ? 'Today' : greeting()}
-        accent={isClinic ? greeting() : "Here's what needs you today."}
+        title={greeting()}
+        accent={isClinic ? undefined : "Here's what needs you today."}
+        info={isClinic ? CLINIC_HELP.todayPage : undefined}
         subtitle={subtitle}
         actions={
           <>
@@ -180,7 +177,7 @@ function Dashboard({
   const primaryTitle = isClinic
     ? staffRole === 'doctor'
       ? 'Clinical inbox'
-      : 'Operations inbox'
+      : 'Need attention'
     : staffRole === 'doctor'
       ? 'Needs attention'
       : 'Operations inbox'
@@ -194,6 +191,8 @@ function Dashboard({
   const escLabel = isClinic && staffRole === 'doctor' ? 'Open clinical reviews' : 'Open escalations'
   const escHint = isClinic && staffRole === 'doctor' ? 'Questions and concerns awaiting clinician' : 'Awaiting staff review or action'
   const patientHint = isClinic ? 'Registered patients' : 'Synthetic demo patients'
+  const primaryTitleInfo =
+    isClinic && staffRole === 'doctor' ? CLINIC_HELP.clinicalInbox : isClinic ? CLINIC_HELP.needAttentionInbox : undefined
 
   return (
     <div className="space-y-6">
@@ -222,15 +221,23 @@ function Dashboard({
         <CardLink to="/patients">
           <SummaryCard label="Patients" value={data.patients_count} hint={patientHint} icon={<Users className="h-4 w-4" />} tone="blue" />
         </CardLink>
-        <CardLink to={isClinic && staffRole === 'doctor' ? '/escalations' : '/tasks'}>
+        <CardLink
+          to={
+            isClinic && staffRole === 'doctor'
+              ? '/escalations'
+              : isClinic
+                ? '/tasks?view=attention'
+                : '/tasks?queue=followups_due'
+          }
+        >
           <SummaryCard
-            label={staffRole === 'doctor' && isClinic ? 'Clinical items' : 'Follow-ups due'}
+            label={staffRole === 'doctor' && isClinic ? 'Clinical items' : 'Need attention'}
             value={staffRole === 'doctor' && isClinic ? clinical.length : isClinic ? operations.length : data.followups_due_count}
             hint={
               staffRole === 'doctor' && isClinic
                 ? 'Needs doctor review'
                 : isClinic
-                  ? 'Open operations queue items'
+                  ? 'Callbacks & staff follow-ups (same tab on Tasks)'
                   : 'Pending or due by end of today'
             }
             icon={<ListChecks className="h-4 w-4" />}
@@ -238,7 +245,7 @@ function Dashboard({
           />
         </CardLink>
         <CardLink to="/calls">
-          <SummaryCard label="Calls completed" value={data.calls_completed_count} hint="Last 7 days · no-answer and failed excluded" icon={<PhoneCall className="h-4 w-4" />} tone="green" />
+          <SummaryCard label="Calls completed" value={data.calls_completed_count} hint="Last 7 days" icon={<PhoneCall className="h-4 w-4" />} tone="green" />
         </CardLink>
         <CardLink to="/escalations">
           <SummaryCard label={escLabel} value={data.open_escalations_count} hint={escHint} icon={<AlertTriangle className="h-4 w-4" />} tone={data.open_escalations_count ? 'red' : 'grey'} />
@@ -256,14 +263,15 @@ function Dashboard({
               )}
             </span>
           }
+          titleInfo={primaryTitleInfo}
           actions={
             isClinic && staffRole === 'doctor' ? (
               <Link to="/escalations" className="text-xs font-medium text-teal-700 hover:underline">
                 Clinical review
               </Link>
             ) : (
-              <Link to="/tasks?status=awaiting_staff_action" className="text-xs font-medium text-teal-700 hover:underline">
-                View tasks
+              <Link to="/tasks?view=attention" className="text-xs font-medium text-teal-700 hover:underline">
+                View on Tasks
               </Link>
             )
           }
@@ -380,7 +388,7 @@ function Dashboard({
                         {overdue ? 'Overdue · ' : 'Due '}
                         {relativeTime(t.due_at)}
                       </span>
-                      <StatusBadge value={t.status} />
+                      <StatusBadge value={t.status} text={taskStatusLabel(t.status)} />
                       <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => navigate(`/tasks/${t.task_id}`)}>
                         Open
                       </Button>

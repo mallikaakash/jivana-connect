@@ -6,12 +6,14 @@ Phase 1 (implemented): **Bolna batches** place tomorrow’s appointment confirma
 
 1. Front desk **books an appointment** in Jivana.
 2. A **confirmation task** is created automatically. It is **not** called immediately.
-3. **Every day at `CLINIC_CONFIRMATION_BATCH_TIME` (default 10:00 IST)**, the API builds one **Bolna batch** for all patients with appointments **the next calendar day** and schedules it.
+3. **Every day at `CLINIC_CONFIRMATION_BATCH_TIME` (default 16:00 IST)**, the API builds one **Bolna batch** for all patients with appointments **the next calendar day** and schedules it.
 4. Outcomes appear in **Today**, **Calls**, and **Appointments** (confirmation state) — same as before.
 
-**Other task types** (post-procedure, test reminder, callbacks): staff use **Tasks → Start Jiya call**, or a **manual batch** on the Batches page.
+**Other follow-ups** (test reminders, post-procedure check-ins, clinician reminders, patient callbacks): **Jiya auto-dials** when the task is **due today** (`CLINIC_AUTO_DIAL_FOLLOWUPS=true`, default). Test reminders capture follow-up visit timing **on the same call** — staff book on the calendar; no extra scheduling call. Staff can still use **Start Jiya call** to place a call immediately.
 
-**Auto-dial** (old loop every 2 minutes) is **off by default** when daily confirmation batch is enabled.
+**Appointment confirmations** stay on the **daily Bolna batch** — not the auto-dial loop.
+
+Legacy **AUTO_DIAL_ENABLED** dials every eligible task including confirmations; leave it `false` when using the daily batch.
 
 ---
 
@@ -20,7 +22,7 @@ Phase 1 (implemented): **Bolna batches** place tomorrow’s appointment confirma
 | Variable | Default (clinic) | Meaning |
 |----------|------------------|---------|
 | `CLINIC_DAILY_CONFIRMATION_BATCH` | `true` | Enable daily batch + disable default auto-dial |
-| `CLINIC_CONFIRMATION_BATCH_TIME` | `10:00` | IST time (hour:minute) the scheduler runs |
+| `CLINIC_CONFIRMATION_BATCH_TIME` | `16:00` | IST time (hour:minute) the scheduler runs |
 | `AUTO_DIAL_ENABLED` | `false` when daily batch on | Legacy per-task polling dial |
 | `BOLNA_CALL_RETRY_ENABLED` | `false` | Phase 2: Bolna retries no-answer/busy on **single** `/call` |
 | `CLINIC_CRON_SECRET` | (unset) | Secret for Cloud Scheduler HTTP trigger |

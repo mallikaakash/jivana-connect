@@ -1,3 +1,4 @@
+import clsx from 'clsx'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, APP_MODE, type Appointment, type Call, type Escalation, type Task } from '@/api'
@@ -10,34 +11,77 @@ import { Timeline } from '@/components/Timeline'
 import { Button, Card, DemoBadge, DetailList, EmptyState, PageHeader, StatusBadge } from '@/components/ui'
 import { appointmentNextStep } from '@/features/secondary/appointmentNextStep'
 import { BackLink, LoadGate, RefreshError, TextLink, VoiceModeBadge } from '@/features/secondary/common'
-import { comparePriority, formatDateTime, label, relativeTime } from '@/lib/format'
+import {
+  bookingStatusLabel,
+  comparePriority,
+  confirmationStateLabel,
+  formatDateTime,
+  isReplacedVisit,
+  label,
+  outcomeLabel,
+  relativeTime,
+  taskStatusLabel,
+} from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
 
 const CLOSED_TASK_STATUSES = ['completed', 'cancelled']
 
 function AppointmentItem({ appt }: { appt: Appointment }) {
+  const cancelled = appt.booking_status === 'cancelled'
+  const replaced = isReplacedVisit(appt)
   return (
-    <li className="py-3 first:pt-0 last:pb-0">
+    <li
+      className={clsx(
+        'py-3 first:pt-0 last:pb-0',
+        cancelled && 'rounded-lg bg-slate-50/80 px-3 -mx-1 text-slate-400 opacity-75',
+      )}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <div className="text-sm font-medium text-navy-800">
+          <div className={clsx('text-sm', cancelled ? 'font-normal text-slate-400' : 'font-medium text-navy-800')}>
             {appt.department} · {appt.clinician}
           </div>
-          <div className="text-xs text-slate-500">
+          <div className={clsx('text-xs', cancelled ? 'text-slate-400/90' : 'text-slate-500')}>
             {formatDateTime(appt.scheduled_at)} ({relativeTime(appt.scheduled_at)})
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <StatusBadge value={appt.booking_status} text={`Booking: ${label(appt.booking_status)}`} />
-          <StatusBadge value={appt.confirmation_state} text={`Confirmation: ${label(appt.confirmation_state)}`} />
+          {replaced ? (
+            <StatusBadge
+              value={appt.booking_status}
+              text={bookingStatusLabel(appt.booking_status, appt.confirmation_state)}
+              tone="red"
+              className="opacity-90"
+            />
+          ) : (
+            <>
+              <StatusBadge
+                value={appt.booking_status}
+                text={`Booking: ${bookingStatusLabel(appt.booking_status, appt.confirmation_state)}`}
+                tone={cancelled ? 'red' : undefined}
+                className={cancelled ? 'opacity-90' : undefined}
+              />
+              <StatusBadge
+                value={appt.confirmation_state}
+                text={`Confirmation: ${confirmationStateLabel(appt.confirmation_state)}`}
+                tone={cancelled ? 'grey' : undefined}
+                className={cancelled ? 'opacity-70' : undefined}
+              />
+            </>
+          )}
         </div>
       </div>
-      <div className="mt-1 text-xs text-slate-600">
-        Next step: <span className="font-medium">{appointmentNextStep(appt)}</span>
+      {appt.confirmation_note && (
+        <p className={clsx('mt-1 text-xs', cancelled ? 'text-slate-400/90' : 'text-slate-500')}>{appt.confirmation_note}</p>
+      )}
+      <div className={clsx('mt-1 text-xs', cancelled ? 'text-slate-400/90' : 'text-slate-600')}>
+        Next step: <span className={cancelled ? 'font-normal' : 'font-medium'}>{appointmentNextStep(appt)}</span>
         {appt.task_id && (
           <>
             {' · '}
-            <TextLink to={`/tasks/${appt.task_id}`}>Related task</TextLink>
+            <TextLink to={`/tasks/${appt.task_id}`} className={cancelled ? '!text-slate-400' : undefined}>
+              Related task
+            </TextLink>
           </>
         )}
       </div>
@@ -57,7 +101,10 @@ function TaskItem({ task }: { task: Task }) {
         </div>
         <div className="flex flex-wrap gap-1.5">
           {(task.priority === 'high' || task.priority === 'urgent') && <StatusBadge value={task.priority} />}
-          <StatusBadge value={task.status} />
+          <StatusBadge value={task.status} text={taskStatusLabel(task.status)} />
+          {task.latest_outcome && APP_MODE === 'clinic' && (
+            <StatusBadge value={task.latest_outcome} text={outcomeLabel(task.latest_outcome, true)} />
+          )}
         </div>
       </div>
       <div className="mt-1 text-xs text-slate-600">
@@ -80,7 +127,7 @@ function CallItem({ call, clinic }: { call: Call; clinic: boolean }) {
         <div className="flex flex-wrap gap-1.5">
           {!clinic && <VoiceModeBadge isLive={call.is_live} />}
           <StatusBadge value={call.status} />
-          {call.outcome && <StatusBadge value={call.outcome} />}
+          {call.outcome && <StatusBadge value={call.outcome} text={outcomeLabel(call.outcome, clinic)} />}
         </div>
       </div>
       {call.summary && <p className="mt-1 line-clamp-2 text-xs text-slate-600">{call.summary}</p>}
@@ -134,9 +181,12 @@ export default function PatientDetailPage() {
     .filter((t) => !CLOSED_TASK_STATUSES.includes(t.status))
     .sort((a, b) => comparePriority(a.priority, b.priority) || a.due_at.localeCompare(b.due_at))
   const recentCalls = [...calls].sort((a, b) => (b.started_at ?? b.created_at).localeCompare(a.started_at ?? a.created_at))
-  const sortedEsc = [...escalations].sort(
-    (a, b) => Number(a.status === 'resolved') - Number(b.status === 'resolved') || b.created_at.localeCompare(a.created_at),
-  )
+  const openEscalations = escalations.filter((e) => e.status !== 'resolved')
+  const resolvedEscalations = escalations.filter((e) => e.status === 'resolved')
+  const sortEsc = (list: Escalation[]) =>
+    [...list].sort(
+      (a, b) => Number(a.status === 'resolved') - Number(b.status === 'resolved') || b.created_at.localeCompare(a.created_at),
+    )
 
   return (
     <div>
@@ -242,15 +292,44 @@ export default function PatientDetailPage() {
         </div>
 
         <div className="space-y-6">
-          <Card title={`Escalations (${escalations.length})`}>
-            {sortedEsc.length === 0 ? (
-              <EmptyState title="No escalations" />
+          <Card
+            title={
+              openEscalations.length > 0
+                ? `Clinical reviews needing action (${openEscalations.length})`
+                : resolvedEscalations.length > 0
+                  ? 'Clinical review history'
+                  : 'Clinical reviews'
+            }
+          >
+            {openEscalations.length === 0 && resolvedEscalations.length === 0 ? (
+              <EmptyState title="No clinical reviews on file" description="Concerns from Jiya calls will appear here when routed for staff." />
             ) : (
-              <ul className="divide-y divide-slate-100">
-                {sortedEsc.map((e) => (
-                  <EscalationItem key={e.escalation_id} esc={e} />
-                ))}
-              </ul>
+              <div className="space-y-4">
+                {openEscalations.length === 0 ? (
+                  <EmptyState
+                    title="No open clinical reviews"
+                    description={`${resolvedEscalations.length} past concern${resolvedEscalations.length === 1 ? '' : 's'} already resolved by staff.`}
+                  />
+                ) : (
+                  <ul className="divide-y divide-slate-100">
+                    {sortEsc(openEscalations).map((e) => (
+                      <EscalationItem key={e.escalation_id} esc={e} />
+                    ))}
+                  </ul>
+                )}
+                {resolvedEscalations.length > 0 && (
+                  <div className={openEscalations.length > 0 ? 'border-t border-slate-100 pt-4' : ''}>
+                    <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                      Resolved ({resolvedEscalations.length})
+                    </p>
+                    <ul className="divide-y divide-slate-100 opacity-80">
+                      {sortEsc(resolvedEscalations).map((e) => (
+                        <EscalationItem key={e.escalation_id} esc={e} />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
           </Card>
           <Card title="Activity">

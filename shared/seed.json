@@ -29,7 +29,7 @@
       "latest_outcome": null, "extracted_fields": null, "test_tracking": null, "callback_window": null, "escalation_id": null,
       "created_at": "rel:-2d@09:00", "updated_at": "rel:-2d@09:00",
       "demo_outcome": "rescheduling_requested",
-      "demo_extracted_fields": { "appointment_outcome": "rescheduling_requested", "preferred_reschedule_window": "Day after tomorrow, after 4 PM", "patient_note": "Has a family function tomorrow morning", "callback_requested": false, "callback_window": null }
+      "demo_extracted_fields": { "appointment_outcome": "rescheduling_requested", "preferred_reschedule_window": "Next week, mornings", "patient_note": "Has a family function tomorrow morning", "callback_requested": false, "callback_window": null }
     },
     {
       "task_id": "task_demo_002", "patient_id": "patient_demo_002", "appointment_id": "appt_demo_002",

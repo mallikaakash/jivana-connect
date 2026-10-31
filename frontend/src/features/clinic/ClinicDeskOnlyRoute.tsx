@@ -6,7 +6,7 @@ import { useStaffRole } from '@/features/clinic/workspace'
 export function ClinicDeskOnlyRoute() {
   const [role] = useStaffRole()
   if (APP_MODE === 'clinic' && role === 'doctor') {
-    return <Navigate to="/" replace />
+    return <Navigate to="/today" replace />
   }
   return <Outlet />
 }

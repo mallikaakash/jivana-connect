@@ -69,7 +69,7 @@ export interface JivanaApi {
   downloadReport(kind: 'patients' | 'calls' | 'tasks'): Promise<void>
 }
 
-export { getClinicAccessToken, setClinicAccessToken } from './auth'
+export { getClinicAccessToken, resolveClinicAccessKey, setClinicAccessToken } from './auth'
 
 export const APP_MODE: 'demo' | 'clinic' =
   import.meta.env.VITE_JIVANA_MODE === 'clinic' ? 'clinic' : 'demo'

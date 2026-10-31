@@ -46,8 +46,9 @@ export function useStaffRole(): [StaffRole, (r: StaffRole) => void] {
   return [current, set]
 }
 
-export function staffDisplayName(metaLead: string | null | undefined): string {
-  return metaLead?.trim() || 'Clinic staff'
+export function staffDisplayName(metaLead: string | null | undefined, role: StaffRole): string {
+  if (role === 'desk') return 'Front desk staff'
+  return metaLead?.trim() || 'Clinical lead'
 }
 
 export function staffInitials(name: string): string {

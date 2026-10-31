@@ -85,6 +85,49 @@ def test_full_patient_journey_all_workflows(journey_client):
     assert row["booking_status"] == "scheduled"
     assert row["scheduled_at"] == booking_at
 
+    appt2 = client.post(
+        "/api/appointments",
+        json={
+            "patient_id": pid,
+            "scheduled_at": "2026-11-01T16:00:00+05:30",
+            "department": "General OPD",
+            "clinician": "Dr. Sharma",
+        },
+    ).json()
+    conf2 = appt2["task"]["task_id"]
+    appt2_id = appt2["appointment"]["appointment_id"]
+    call2 = _start(client, conf2)
+    _webhook(
+        client,
+        call2,
+        extracted={
+            "appointment_outcome": "rescheduling_requested",
+            "preferred_reschedule_window": "2 November",
+        },
+    )
+    detail2 = client.get(f"/api/tasks/{conf2}").json()
+    assert detail2["task"]["status"] == "pending"
+    assert detail2["appointment"]["appointment_id"] != appt2_id
+    assert detail2["appointment"]["scheduled_at"] == "2026-11-02T16:00:00+05:30"
+    assert detail2["appointment"]["booking_status"] == "scheduled"
+    all_appts = client.get("/api/appointments").json()["items"]
+    old2 = next(a for a in all_appts if a["appointment_id"] == appt2_id)
+    assert old2["scheduled_at"] == "2026-11-01T16:00:00+05:30"
+    assert old2["booking_status"] == "cancelled"
+
+    svc = client.app.state.service
+    task_row = svc.store.get("tasks", conf_task)
+    task_row["extracted_fields"] = {
+        **(task_row.get("extracted_fields") or {}),
+        "preferred_reschedule_window": "3 November",
+    }
+    svc.store.save("tasks", task_row)
+    retro = client.get(f"/api/tasks/{conf_task}").json()
+    assert retro["appointment"]["scheduled_at"] == "2026-11-03T16:00:00+05:30"
+    assert retro["task"]["status"] == "pending"
+    retro_appts = client.get("/api/appointments").json()["items"]
+    assert any(a["appointment_id"] == appt_id and a["booking_status"] == "cancelled" for a in retro_appts)
+
     test_task = client.post(
         "/api/tasks",
         json={

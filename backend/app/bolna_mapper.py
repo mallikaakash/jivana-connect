@@ -172,14 +172,9 @@ class JiyaExtractionMapper:
                 contract["checkin_result"] = "routine_ok" if feeling == "better" else None
 
         elif task_type == "test_report_reminder":
-            if call_outcome == "reminder_acknowledged":
-                contract["test_completed"] = True
-            elif call_outcome in ("inconclusive", "incomplete", "callback_requested"):
+            # "Reminder acknowledged" only means the patient heard Jiya — not that the lab test is done.
+            if call_outcome in ("inconclusive", "incomplete", "callback_requested", "reminder_acknowledged"):
                 contract["test_completed"] = None
-            elif _yn(jiya.get("follow_up_required")) is False:
-                feeling = jiya.get("patient_feeling")
-                if feeling and snake(str(feeling)) in ("better", "same"):
-                    contract["test_completed"] = True
 
         elif task_type == "clinician_task_reminder":
             if call_outcome == "reminder_acknowledged":
@@ -270,5 +265,9 @@ def prepare_extracted_for_task(
     if not is_jiya_extraction(flat):
         return flat, None
     contract, directives = JiyaExtractionMapper.map(task_type, flat)
+    if task_type == "test_report_reminder" and transcript:
+        inferred = infer_workflow_from_transcript(task_type, transcript, summary)
+        if inferred and inferred.get("test_completed") is not None:
+            contract["test_completed"] = inferred["test_completed"]
     storage = JiyaExtractionMapper.merge_for_storage(contract, flat)
     return storage, directives

@@ -46,11 +46,15 @@ export type EventType =
 export type Actor = 'system' | 'jiya' | 'staff' | 'bolna_webhook' | 'simulator'
 export type ExtractedFields = Record<string, string | boolean | null>
 
+export const PATIENT_GENDERS = ['female', 'male', 'other', 'prefer_not_to_say'] as const
+export type PatientGender = (typeof PATIENT_GENDERS)[number]
+
 export interface Patient {
   patient_id: string
   display_name: string
   demo_id: string
   age: number | null
+  gender?: PatientGender | null
   language: 'hi' | 'en' | 'hinglish'
   contact_ref: string
   phone_masked: string
@@ -282,6 +286,7 @@ export interface CreatePatientInput {
   contact_permitted?: boolean
   chart_number?: string
   age?: number
+  gender?: PatientGender
 }
 
 export interface CreateTaskInput {
@@ -334,12 +339,16 @@ export interface ListResponse<T> {
   items: T[]
 }
 
+export type TaskQueueFilter = 'operations' | 'clinical' | 'followups_due' | 'open' | 'history'
+
 export interface TaskFilters {
   status?: TaskStatus
   task_type?: TaskType
   priority?: Priority
   patient_id?: string
   due?: 'overdue' | 'today' | 'upcoming'
+  /** Matches dashboard inbox counts (operations / clinical / follow-ups due). */
+  queue?: TaskQueueFilter
 }
 
 export interface EscalationPatch {
@@ -365,6 +374,7 @@ export interface UpdatePatientInput {
   contact_permitted?: boolean
   chart_number?: string
   age?: number | null
+  gender?: PatientGender | null
 }
 
 export interface UpdateAppointmentInput {

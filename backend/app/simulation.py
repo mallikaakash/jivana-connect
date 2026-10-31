@@ -12,7 +12,13 @@ _BASE = {"callback_requested": False, "callback_window": None}
 
 DEFAULT_FIELDS: dict[str, dict] = {
     "appointment_confirmation": {"appointment_outcome": "confirmed", "preferred_reschedule_window": None, "patient_note": None},
-    "test_report_reminder": {"test_completed": True, "test_date": "Yesterday", "patient_note": None},
+    "test_report_reminder": {
+        "test_completed": True,
+        "test_date": "Yesterday",
+        "callback_requested": True,
+        "callback_window": "Next week, morning",
+        "patient_note": None,
+    },
     "post_procedure_checkin": {"checkin_result": "routine_ok", "concern_summary": None},
     "clinician_task_reminder": {"task_acknowledged": True, "patient_note": None},
     "callback_request": {"patient_note": "Spoke with the patient in the requested window"},
@@ -105,9 +111,23 @@ def example_transcript(task: dict | None, patient: dict | None, appt: dict | Non
                        else f"Your doctor asked you to get a {test} test done. Have you been able to do it?"))
         if ex.get("test_completed") is True:
             when = ex.get("test_date") or "recently"
+            window = ex.get("callback_window") or "next week"
             turns.append(p(f"Haan, {when.lower()} karwa liya." if hi else f"Yes, I did it {when.lower()}."))
-            turns.append(a("Dhanyavaad, maine note kar liya hai. Clinic ki team report check karegi." if hi
-                           else "Thank you, I've noted that. The clinic team will check for the report."))
+            turns.append(
+                a(
+                    "Achha. Report phone par mat bhejiye. Follow-up visit kab schedule karein?"
+                    if hi
+                    else "Good to hear. Please don't share report details on this call. When would you like to come in for a follow-up visit?"
+                )
+            )
+            turns.append(p(f"{window} theek rahega." if hi else f"{window} works for me."))
+            turns.append(
+                a(
+                    "Dhanyavaad, maine follow-up visit ka time note kar liya. Clinic desk calendar par slot confirm karegi."
+                    if hi
+                    else "Thank you — I've noted when you'd like to come in. The front desk will confirm the slot on the calendar."
+                )
+            )
         else:
             turns.append(p("Abhi nahi hua." if hi else "Not yet."))
             turns.append(a("Koi baat nahi, hum aapko do din mein phir yaad dilayenge." if hi

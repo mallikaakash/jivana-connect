@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, ApiError, TASK_TYPES, type TaskType } from '@/api'
+import { ModalOverlay } from '@/components/ModalOverlay'
 import { Button, ErrorBanner } from '@/components/ui'
 import { label } from '@/lib/format'
 
@@ -21,10 +22,10 @@ const TEMPLATES: Partial<Record<TaskType, { title: string; purpose: string; call
     call_context: 'Patient asked the clinic to call back. Be brief and professional.',
   },
   test_report_reminder: {
-    title: 'Test / report reminder',
-    purpose: 'Remind the patient to complete a pending test or bring their report.',
+    title: 'Test reminder',
+    purpose: 'Check whether the patient has completed a pending lab test.',
     call_context:
-      'Remind about the test in visit details. Ask if they completed the test or have the report. Do not interpret results.',
+      'Ask only if they completed the test named in visit details. Do not ask for reports, values, or photos. If yes, ask when they can come in for a follow-up visit and record their preference. Do not interpret clinical results.',
   },
   clinician_task_reminder: {
     title: 'Clinician instruction reminder',
@@ -94,10 +95,10 @@ export function CreateFollowUpDialog({ open, patientId, patientName, onClose, on
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/40 p-4 backdrop-blur-sm">
-      <form onSubmit={submit} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+    <ModalOverlay onBackdropClick={onClose}>
+      <form onSubmit={submit} className="max-h-[85dvh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <h2 className="text-lg font-medium text-navy-900">Schedule follow-up call</h2>
-        <p className="mt-1 text-sm text-slate-600">For {patientName}. Context is sent to Jiya on the call.</p>
+        <p className="mt-0.5 text-sm text-slate-500">{patientName}</p>
         {error && <div className="mt-3"><ErrorBanner error={error} /></div>}
         <label className="mt-4 block text-sm font-medium text-slate-700">
           Type
@@ -138,6 +139,6 @@ export function CreateFollowUpDialog({ open, patientId, patientName, onClose, on
           <Button type="submit" loading={loading}>Create follow-up</Button>
         </div>
       </form>
-    </div>
+    </ModalOverlay>
   )
 }
