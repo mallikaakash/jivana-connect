@@ -1,0 +1,13 @@
+# Only the backend image is built on Cloud Build; skip everything heavy or secret.
+.git
+.gitignore
+node_modules/
+frontend/
+scripts/
+docs/
+.cursor/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.env
+*.png

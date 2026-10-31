@@ -1,4 +1,14 @@
 .env
 node_modules/
 .cursor/runs/
+.cursor/mcp.json
 docs/SPEC.md
+dist/
+frontend/.env.local
+frontend/.env.production
+backend/.env
+backend/.env.gcp
+backend/.venv/
+__pycache__/
+.pytest_cache/
+*.tsbuildinfo

@@ -1,0 +1,13 @@
+# Optional MongoDB for persistence. Start: docker compose up -d
+# Then set MONGO_URL=mongodb://localhost:27017 in backend/.env
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - jivana-mongo:/data/db
+    restart: unless-stopped
+
+volumes:
+  jivana-mongo:
