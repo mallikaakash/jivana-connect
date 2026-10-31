@@ -30,7 +30,7 @@ def test_dashboard_needs_attention_kinds_and_order(client):
     concern = next(i for i in items if i["task_id"] == "task_demo_004")
     assert concern["escalation_id"] == "esc_demo_001"
     callback = next(i for i in items if i["task_id"] == "task_demo_007")
-    assert callback["reason"] == "Callback window: Tomorrow, 4–6 PM"
+    assert callback["reason"] == "Confirm appointment slot — Tomorrow, 4–6 PM"
 
 
 def test_needs_attention_concern_wins_over_rescheduling_and_drops_when_resolved(client):

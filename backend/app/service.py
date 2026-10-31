@@ -400,7 +400,7 @@ class Service:
         out["call_ineligible_reason"] = reason
         if with_name:
             out["patient_name"] = self.patient_name(t["patient_id"])
-        if t.get("latest_outcome") == "callback_requested":
+        if t.get("latest_outcome") == "callback_requested" and not t.get("escalation_id"):
             sid = self._spawned_followup_task_id(t)
             if sid:
                 out["spawned_followup_task_id"] = sid
@@ -1434,12 +1434,14 @@ class Service:
         if callback_requested:
             cb = self._create_callback_task(task, ex.get("callback_window"))
             task["spawned_followup_task_id"] = cb["task_id"]
-            if cb.get("callback_window"):
-                task["next_action"] = f"Desk follow-up: confirm slot — {cb['callback_window']}"
-            else:
-                task["next_action"] = f"Desk follow-up: {cb['title']}"
-            task["updated_at"] = timeutil.now_iso()
-            self.store.save("tasks", task)
+            # Do not override clinical next steps (e.g. open escalation) when callback is secondary.
+            if not escalation:
+                if cb.get("callback_window"):
+                    task["next_action"] = f"Desk follow-up: confirm slot — {cb['callback_window']}"
+                else:
+                    task["next_action"] = f"Desk follow-up: {cb['title']}"
+                task["updated_at"] = timeutil.now_iso()
+                self.store.save("tasks", task)
             result_msg += f" Callback task {cb['task_id']} created" + (f" ({cb['callback_window']})." if cb.get("callback_window") else ".")
 
         call["processing_result"] = result_msg.strip()
