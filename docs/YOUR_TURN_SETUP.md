@@ -70,7 +70,7 @@ Hosting deploy uses your Google account for project **`project-bf77a013-c0b3-413
 1. In a terminal:
 
 ```bash
-cd /Users/violinadoley/Projects/clini-ai
+cd /Users/violinadoley/Projects/jivana-connect
 npm install   # once, installs firebase-tools
 npm run firebase:login
 ```

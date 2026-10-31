@@ -2,104 +2,74 @@
 
 **Every patient connected. Every follow-up accounted for.**
 
-**Live demo:** https://jivana-connect.vercel.app
+Voice-first patient engagement for clinics — confirm appointments, run follow-ups, and capture concerns that need the care team, between visits and without every touchpoint requiring another trip to the chair.
 
-Jivana Connect is an AI-powered patient follow-up and care-coordination workspace for clinics, built for the Bolna Symphony Buildathon. **Jiya**, a Hindi / Hinglish / English voice agent on [Bolna](https://www.bolna.ai), calls patients about appointment confirmations, test reminders, post-procedure check-ins and clinician-assigned tasks. A FastAPI backend validates each call result and applies the workflow rules. Clinic staff use the dashboard to see what needs attention and take the next step.
-
-> CALL → UNDERSTAND → EXTRACT → VALIDATE → UPDATE → TAKE THE NEXT ACTION
-
-The hosted demo runs in **offline mock mode**: synthetic patient data, with calls simulated in the browser. Try it: **Tasks → Confirm cardiology appointment (Asha Verma) → Start Jiya call**. After about 8 seconds the call completes, the task moves to *Awaiting staff action*, and the appointment's booking stays unchanged until staff rebook. Jiya never diagnoses, prescribes or changes bookings; concerns are routed to humans.
-
-## Repo layout
-
-| Path | What |
+| | |
 |---|---|
-| `frontend/` | React + TypeScript + Vite + Tailwind staff dashboard (overview, tasks, patients, appointments, calls, escalations, settings) |
-| `backend/` | FastAPI workflow service: simulated or live Bolna calls, idempotent webhook, in-memory store (optional MongoDB). See `backend/README.md` |
-| `shared/seed.json` | Synthetic demo dataset used by both sides |
-| `docs/CONTRACT.md` | Single source of truth for statuses, record shapes, workflow rules and the API |
-| `docs/bolna/` | Live Jiya config export, extraction sample, [live runbook](docs/bolna/LIVE_RUNBOOK.md) |
-| `docs/Jivana_Connect_UI_Frontend_Specification.pdf` | Product / UI spec |
-| `backend/bolna/` | Jiya prompt and extraction drafts |
+| **Live app** | https://project-bf77a013-c0b3-413c-a75.web.app/ |
+| **Pitch deck** | https://claude.ai/artifact/4VcbUERKZ1wxELpZZKPPzQ#slide-3dd33bdac6c2 |
+| **Team** | Jivana Labs |
+
+Built for the [Bolna Symphony Buildathon](https://www.bolna.ai). **Jiya** is our Hindi / Hinglish / English voice agent on [Bolna](https://www.bolna.ai). A **FastAPI** backend on Cloud Run validates call results and updates tasks, appointments, and escalations in **MongoDB**. Staff use the **React** dashboard (Firebase Hosting) for Today queues, tasks, calls, and clinical review.
+
+> Call → extract → validate → update task → next action
+
+## Try the demo (judges & reviewers)
+
+1. Open the **[live app](https://project-bf77a013-c0b3-413c-a75.web.app/)**.
+2. Click **Open clinic workspace** on the landing page (reviewer access is applied automatically).
+3. If **Today** is empty, click **Load demo data** (or **Settings → Sample walkthrough data**).
+4. Toggle **Front desk** vs **Doctor** in the header to see operations vs clinical workflows.
+
+Suggested path: register a patient → book a dental appointment → **Tasks & Follow-ups** → **Start Jiya call** (live Bolna when configured) → **Calls** for transcript → **Clinical review** in Doctor mode.
+
+More detail: [`docs/HACKATHON_REVIEWERS.md`](docs/HACKATHON_REVIEWERS.md) · demo script: [`docs/DEMO_VIDEO_5MIN_SCRIPT.md`](docs/DEMO_VIDEO_5MIN_SCRIPT.md)
+
+## What’s in the repo
+
+| Path | Purpose |
+|------|---------|
+| [`frontend/`](frontend/) | React + TypeScript + Vite staff UI (landing, Today, patients, tasks, appointments, calls, clinical review, settings) |
+| [`backend/`](backend/) | FastAPI workflow service, Bolna webhooks, clinic mode + MongoDB |
+| [`docs/CONTRACT.md`](docs/CONTRACT.md) | API and workflow contract |
+| [`docs/CLINIC_PRODUCT.md`](docs/CLINIC_PRODUCT.md) | Clinic / doctor vs front desk behavior |
+| [`docs/bolna/`](docs/bolna/) | Live Jiya config notes and [runbook](docs/bolna/LIVE_RUNBOOK.md) |
+| [`shared/seed.json`](shared/seed.json) | Synthetic dataset for local mock mode |
 
 ## Run locally
 
 ```bash
-# backend → http://localhost:8000
+# Backend → http://localhost:8000
 cd backend && uv sync && uv run uvicorn app.main:app --reload --port 8000
 
-# frontend → http://localhost:5173 (proxies /api to the backend)
+# Frontend → http://localhost:5173 (proxies /api to backend)
 cd frontend && npm install && npm run dev
 
-# frontend only, no backend
+# Frontend only (mock API, no backend)
 cd frontend && VITE_API_MODE=mock npm run dev
 ```
 
-Calls are simulated unless `BOLNA_API_KEY`, `BOLNA_AGENT_ID` and `DEMO_CALL_RECIPIENT` are set in `backend/.env` (see `backend/.env.example`). For a live test checklist: `docs/bolna/LIVE_RUNBOOK.md` and `cd backend && uv run python scripts/check_live_ready.py`.
-
-Staff UI also includes **Batches** (preview → create → schedule) when the backend is live; mock mode on Vercel supports preview only.
+Live outbound calls need Bolna env vars in `backend/.env` (see `backend/.env.example` and `docs/bolna/LIVE_RUNBOOK.md`).
 
 ```bash
-npm run test:ci   # pytest + frontend production build
+npm run test:ci    # backend pytest + frontend production build
+npm run smoke:prod # after deploy (see scripts)
 ```
 
-## Deploy
+## Deploy (production clinic stack)
 
-- **Clinic production (GCP):** First-time Atlas/Firebase CLI: [`docs/YOUR_TURN_SETUP.md`](docs/YOUR_TURN_SETUP.md). After that: [`docs/FINISH_SETUP.md`](docs/FINISH_SETUP.md) (browser-only steps) + `npm run deploy:clinic`. Reference: [`docs/DEPLOY_GCP.md`](docs/DEPLOY_GCP.md).
-- **Hackathon demo:** **Frontend** on Vercel with `VITE_API_MODE=mock`. **Backend** optional on Cloud Run: `gcloud run deploy jivana-api --source . --no-cpu-throttling --min-instances=1 --max-instances=1` (simulated voice + in-memory/Mongo).
+First-time GCP/Firebase/Atlas: [`docs/YOUR_TURN_SETUP.md`](docs/YOUR_TURN_SETUP.md) · finish checklist: [`docs/FINISH_SETUP.md`](docs/FINISH_SETUP.md)
+
+```bash
+npm run deploy:clinic   # Cloud Run API + Firebase Hosting (see docs/DEPLOY_GCP.md)
+```
+
+Hosted demo URL above uses this stack (not Vercel mock).
+
+## Spec-driven agents (optional)
+
+This repo includes Cursor / Claude tooling to implement from `docs/SPEC.md`. See [`AGENTS.md`](AGENTS.md) and `npm run implement -- --help`.
 
 ---
 
-# Spec-driven implementation tooling
-
-Programmatic spec implementation — **Cursor Cloud** (with monitoring) or **Claude Code** locally.
-
-### Quick start (Cursor Cloud)
-
-1. Copy `docs/SPEC.template.md` → `docs/SPEC.md` and write your spec (full text is sent in the prompt; pushing to GitHub is still recommended for the cloud checkout).
-2. `npm install`
-3. **One-time auth** (same Cursor account as the cloud repo — not a separate product):
-
-```bash
-npm run cursor:login
-```
-
-Optional: `CURSOR_API_KEY` from Integrations instead.
-
-4. Kick off a cloud run:
-
-```bash
-npm run implement:cloud
-# or
-npm run implement -- --cloud --detach --spec docs/SPEC.md
-```
-
-The CLI prints a **web URL** (`https://cursor.com/agents/bc-...`), saves `.cursor/runs/latest.json`, and tells you how to follow logs.
-
-### Monitor a cloud run
-
-```bash
-npm run monitor -- --status          # one-shot JSON status (REST)
-npm run monitor -- --follow          # stream logs until done
-npm run monitor -- --watch           # poll every 15s until terminal
-npm run monitor -- --list            # recent sessions
-```
-
-Open the printed web link in the browser to watch conversation, diffs, and artifacts in the Cursor Cloud Agents UI. In Cursor Web, use **Filter → Source → SDK** if you do not see SDK-started agents.
-
-### Stay attached (stream in terminal)
-
-```bash
-npm run implement -- --cloud --spec docs/SPEC.md
-```
-
-Optional: `--auto-pr` to open a PR when the agent finishes.
-
-### Local engines
-
-```bash
-npm run implement -- --engine cursor --spec docs/SPEC.md   # local Cursor agent
-npm run implement -- --engine claude --spec docs/SPEC.md     # Claude Code CLI
-```
-
-See `AGENTS.md` and `npm run implement -- --help`.
+**Jivana Labs** · Jivana Connect

@@ -1,5 +1,5 @@
 {
-  "name": "clini-ai",
+  "name": "jivana-connect",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +15,9 @@
     "deploy:hosting": "./scripts/deploy-firebase-clinic.sh",
     "deploy:clinic": "./scripts/deploy-clinic-production.sh",
     "smoke:prod": "./scripts/smoke-prod.sh",
+    "demo:video": "node scripts/record-app-demo.mjs",
+    "demo:video:live": "node scripts/record-demo-with-calls.mjs",
+    "demo:video:setup": "npx playwright install chromium",
     "firebase:login": "firebase login"
   },
   "engines": {
