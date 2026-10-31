@@ -1,15 +1,29 @@
 import { CheckCheck, CheckCircle2, MessageSquarePlus, UserPlus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { api, type Escalation, type EscalationAction, type EscalationPatch } from '@/api'
+import {
+  api,
+  type Escalation,
+  type EscalationAction,
+  type EscalationPatch,
+  type EscalationResolutionType,
+} from '@/api'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Button, ErrorBanner } from '@/components/ui'
 import { label } from '@/lib/format'
 import { Note } from './common'
 
-const AUTHOR = 'Demo staff'
+const DEFAULT_AUTHOR = 'Demo staff'
 
 const INPUT_CLASS =
   'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:bg-slate-50'
+
+const RESOLUTION_OPTIONS: { value: EscalationResolutionType; label: string }[] = [
+  { value: 'called_patient', label: 'Called patient back' },
+  { value: 'advised_come_in', label: 'Advised to come in' },
+  { value: 'not_clinical', label: 'Not clinical — admin handled' },
+  { value: 'referred_elsewhere', label: 'Referred elsewhere' },
+  { value: 'admin_handled', label: 'Admin / scheduling only' },
+]
 
 const DONE_TEXT: Record<EscalationAction, string> = {
   acknowledge: 'Acknowledgement recorded',
@@ -22,13 +36,26 @@ const DONE_TEXT: Record<EscalationAction, string> = {
  * Only the actions the backend implements (acknowledge, assign, add note, resolve).
  * Each waits for the PATCH response and hands the returned escalation to `onUpdated`; nothing is shown as done before that.
  */
-export function EscalationActions({ escalation, onUpdated }: { escalation: Escalation; onUpdated: (e: Escalation) => void }) {
+export function EscalationActions({
+  escalation,
+  onUpdated,
+  author = DEFAULT_AUTHOR,
+  requireResolutionNote = false,
+  requireResolutionType = false,
+}: {
+  escalation: Escalation
+  onUpdated: (e: Escalation) => void
+  author?: string
+  requireResolutionNote?: boolean
+  requireResolutionType?: boolean
+}) {
   const [pending, setPending] = useState<EscalationAction | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const [assignee, setAssignee] = useState('')
   const [note, setNote] = useState('')
   const [confirmResolve, setConfirmResolve] = useState(false)
+  const [resolutionType, setResolutionType] = useState<EscalationResolutionType>('called_patient')
 
   const { status } = escalation
   const resolved = status === 'resolved'
@@ -38,7 +65,7 @@ export function EscalationActions({ escalation, onUpdated }: { escalation: Escal
     setError(null)
     setDone(null)
     try {
-      const res = await api.updateEscalation(escalation.escalation_id, { ...patch, author: AUTHOR })
+      const res = await api.updateEscalation(escalation.escalation_id, { ...patch, author })
       onUpdated(res.escalation)
       setDone(DONE_TEXT[patch.action])
       return true
@@ -65,7 +92,26 @@ export function EscalationActions({ escalation, onUpdated }: { escalation: Escal
   }
 
   async function doResolve() {
-    if (await run({ action: 'resolve' })) setConfirmResolve(false)
+    if (requireResolutionNote && !note.trim() && escalation.notes.length === 0) {
+      setError(new Error('Add a resolution note before marking resolved.'))
+      setConfirmResolve(false)
+      return
+    }
+    if (requireResolutionNote && note.trim()) {
+      if (!(await run({ action: 'add_note', note: note.trim() }))) {
+        setConfirmResolve(false)
+        return
+      }
+      setNote('')
+    }
+    if (requireResolutionType && !resolutionType) {
+      setError(new Error('Choose how this was resolved.'))
+      setConfirmResolve(false)
+      return
+    }
+    if (await run({ action: 'resolve', resolution_type: requireResolutionType ? resolutionType : undefined })) {
+      setConfirmResolve(false)
+    }
   }
 
   const busy = pending !== null
@@ -171,6 +217,22 @@ export function EscalationActions({ escalation, onUpdated }: { escalation: Escal
         }}
       >
         <p>It will leave the active escalation queue. Only resolve once a staff member has recorded the next step for this patient.</p>
+        {requireResolutionType && (
+          <label className="mt-3 block text-sm text-slate-700">
+            Resolution
+            <select
+              className={`${INPUT_CLASS} mt-1`}
+              value={resolutionType}
+              onChange={(e) => setResolutionType(e.target.value as EscalationResolutionType)}
+            >
+              {RESOLUTION_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {error && pending === null && confirmResolve && <p className="mt-2 text-red-700">Last attempt failed: {error.message}</p>}
       </ConfirmDialog>
     </div>

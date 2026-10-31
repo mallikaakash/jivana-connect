@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, ESCALATION_STATUSES, type Escalation, type EscalationStatus, type WithPatientName } from '@/api'
+import { api, APP_MODE, ESCALATION_STATUSES, type Escalation, type EscalationStatus, type WithPatientName } from '@/api'
+import { useStaffRole } from '@/features/clinic/workspace'
 import { DataTable, type Column } from '@/components/DataTable'
 import { Card, DemoBadge, PageHeader, StatusBadge } from '@/components/ui'
 import { FilterSelect, LoadGate, Note, RefreshError, TextLink } from '@/features/secondary/common'
@@ -52,6 +53,8 @@ const FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
 
 export default function EscalationsPage() {
   const navigate = useNavigate()
+  const [staffRole] = useStaffRole()
+  const clinicalTitle = APP_MODE === 'clinic' && staffRole === 'doctor'
   const [filter, setFilter] = useState<StatusFilter>('active')
 
   const { data, error, loading, reload } = useAsync(
@@ -71,11 +74,17 @@ export default function EscalationsPage() {
   return (
     <div>
       <PageHeader
-        title="Escalations"
+        title={clinicalTitle ? 'Clinical review' : 'Escalations'}
         subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Patient-reported concerns routed for human review. <DemoBadge />
-          </span>
+          APP_MODE === 'clinic' ? (
+            clinicalTitle
+              ? 'Patient questions and concerns from Jiya follow-ups — for clinician judgment.'
+              : 'Patient-reported concerns routed for human review.'
+          ) : (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              Patient-reported concerns routed for human review. <DemoBadge />
+            </span>
+          )
         }
       />
       <Card title="Escalation queue">

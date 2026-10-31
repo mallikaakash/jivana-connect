@@ -10,6 +10,8 @@ dependencies = [
     "pymongo>=4.19.0",
     "python-dotenv>=1.2.4",
     "uvicorn[standard]>=0.54.0",
+    "google-auth>=2.40.0",
+    "requests>=2.32.0",
 ]
 
 [dependency-groups]

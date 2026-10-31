@@ -10,6 +10,7 @@ import {
   type Appointment,
   type AppointmentOutcome,
   type AttentionStatus,
+  type BatchPreviewResult,
   type Call,
   type CallOutcome,
   type CallStatus,
@@ -113,7 +114,7 @@ function freshState(): State {
     appointments: raw.appointments,
     tasks: raw.tasks,
     calls: raw.calls,
-    escalations: raw.escalations,
+    escalations: raw.escalations.map((e) => ({ ...e, resolution_type: (e as Escalation).resolution_type ?? null })),
     events: raw.events,
     seq: 0,
   }
@@ -454,6 +455,7 @@ function completeSimulatedCall(call: Call, atMs: number) {
         status: 'open',
         routing_destination: `${t.department} nurse desk`,
         assigned_to: null,
+        resolution_type: null,
         notes: [],
         created_at: ts,
         updated_at: ts,
@@ -522,6 +524,25 @@ function matchesDue(t: TaskRec, due: TaskFilters['due'], now: number): boolean {
   return d >= endOfToday
 }
 
+function clinicalSnippet(
+  kind: NeedsAttentionItem['kind'],
+  reason: string,
+  esc: Escalation | undefined,
+  nextAction: string,
+): string | null {
+  if (esc?.concern_summary) return esc.concern_summary
+  const prefix = 'Answer patient question: '
+  if (nextAction.startsWith(prefix)) return nextAction.slice(prefix.length).trim() || null
+  if (kind === 'patient_concern') return reason
+  return null
+}
+
+function inboxAudience(kind: NeedsAttentionItem['kind'], esc: Escalation | undefined, nextAction: string): NeedsAttentionItem['audience'] {
+  if (kind === 'patient_concern') return 'clinical'
+  if ((esc && esc.status !== 'resolved') || nextAction.startsWith('Answer patient question:')) return 'clinical'
+  return 'operations'
+}
+
 function needsAttention(now: number): NeedsAttentionItem[] {
   const items: NeedsAttentionItem[] = []
   for (const t of state.tasks) {
@@ -548,16 +569,20 @@ function needsAttention(now: number): NeedsAttentionItem[] {
       reason = t.next_action
     }
     if (!kind) continue
+    const openEsc = esc && esc.status !== 'resolved' ? esc : undefined
     items.push({
       kind,
+      audience: inboxAudience(kind, openEsc, t.next_action),
       task_id: t.task_id,
       patient_id: t.patient_id,
       patient_name: patientName(t.patient_id),
       title: t.title,
       reason,
+      clinical_snippet: clinicalSnippet(kind, reason, openEsc, t.next_action),
       priority,
       due_at: t.due_at,
-      escalation_id: esc && esc.status !== 'resolved' ? esc.escalation_id : null,
+      escalation_id: openEsc ? openEsc.escalation_id : null,
+      task_type: t.task_type,
     })
   }
   return items.sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || ms(a.due_at) - ms(b.due_at))
@@ -579,6 +604,13 @@ export const mockApi: JivanaApi = {
   getMeta: () =>
     latency(() => ({
       environment: 'demo' as const,
+      app_mode: 'demo' as const,
+      clinic_name: null,
+      staff_role_default: null,
+      clinical_lead_label: null,
+      features: { appointments: true },
+      auth_required: false,
+      auto_dial_enabled: false,
       data_mode: 'seeded' as const,
       voice_mode: 'simulated' as const,
       workflows: [...TASK_TYPES],
@@ -598,7 +630,14 @@ export const mockApi: JivanaApi = {
         followups_due_count: state.tasks.filter((t) => (t.status === 'pending' || t.status === 'due') && ms(t.due_at) < endOfToday).length,
         calls_completed_count: state.calls.filter((c) => c.status === 'completed' && ms(c.completed_at ?? c.created_at) >= now - 7 * DAY).length,
         open_escalations_count: state.escalations.filter((e) => e.status !== 'resolved').length,
-        needs_attention: needsAttention(now),
+        ...(() => {
+          const na = needsAttention(now)
+          return {
+            needs_attention: na,
+            clinical_inbox: na.filter((i) => i.audience === 'clinical'),
+            operations_inbox: na.filter((i) => i.audience === 'operations'),
+          }
+        })(),
         recent_calls: [...state.calls].sort(byDesc((c) => c.created_at)).slice(0, 6).map(withName),
         followup_queue: state.tasks
           .filter((t) => t.status === 'pending' || t.status === 'due' || t.status === 'in_progress')
@@ -606,6 +645,7 @@ export const mockApi: JivanaApi = {
           .slice(0, 6)
           .map((t) => withName(toTask(t))),
         recent_activity: newestFirst(state.events).slice(0, 10),
+        system_alerts: [],
       }
     }),
 
@@ -677,6 +717,7 @@ export const mockApi: JivanaApi = {
         appointment: apptById(t.appointment_id) ?? null,
         calls,
         events: eventsFor(ids),
+        spawned_followup: null,
       }
     }),
 
@@ -722,12 +763,28 @@ export const mockApi: JivanaApi = {
     }),
 
   listCalls: (params) =>
-    latency(() => ({
-      items: state.calls
-        .filter((c) => (!params?.status || c.status === params.status) && (!params?.task_id || c.task_id === params.task_id))
-        .sort(byDesc((c) => c.created_at))
-        .map(withName),
-    })),
+    latency(() => {
+      function flaggedClinical(c: Call): boolean {
+        const esc = escById(c.escalation_id)
+        if (esc && esc.status !== 'resolved') return true
+        const t = taskById(c.task_id)
+        if (!t) return false
+        const tesc = escById(t.escalation_id)
+        if (tesc && tesc.status !== 'resolved') return true
+        return t.next_action.startsWith('Answer patient question:')
+      }
+      return {
+        items: state.calls
+          .filter(
+            (c) =>
+              (!params?.status || c.status === params.status) &&
+              (!params?.task_id || c.task_id === params.task_id) &&
+              (params?.flagged !== 'clinical' || flaggedClinical(c)),
+          )
+          .sort(byDesc((c) => c.created_at))
+          .map(withName),
+      }
+    }),
 
   getCall: (callId) =>
     latency(() => {
@@ -801,6 +858,7 @@ export const mockApi: JivanaApi = {
         }
         case 'resolve':
           e.status = 'resolved'
+          if (patch.resolution_type) e.resolution_type = patch.resolution_type
           message = `Resolved by ${author}`
           break
         default:
@@ -812,6 +870,28 @@ export const mockApi: JivanaApi = {
       return { escalation: e }
     }),
 
+  loadClinicDemoSeed: () =>
+    latency(() => {
+      state = freshState()
+      return { ok: true as const, counts: { patients: 8, tasks: 12, calls: 7, escalations: 2 } }
+    }),
+
+  previewDailyConfirmationBatch: () =>
+    latency(() => ({
+      appointment_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+      batch_time_ist: '10:00',
+      task_ids: [],
+      recipient_count: 0,
+      included: [],
+      skipped: [],
+      already_scheduled_today: false,
+    })),
+
+  runDailyConfirmationBatch: () =>
+    latency(() => {
+      throw new Error('Daily confirmation batch requires the live clinic API.')
+    }),
+
   resetDemo: () =>
     latency(() => {
       state = freshState()
@@ -821,5 +901,95 @@ export const mockApi: JivanaApi = {
         // ignore
       }
       return { ok: true as const }
+    }),
+
+  previewBatch: (taskIds) =>
+    latency(() => {
+      const included: BatchPreviewResult['included'] = []
+      const skipped: BatchPreviewResult['skipped'] = []
+      for (const tid of taskIds) {
+        const t = taskById(tid)
+        if (!t) {
+          skipped.push({ task_id: tid, reason: 'Task not found' })
+          continue
+        }
+        const task = toTask(t)
+        if (!task.call_eligible) {
+          skipped.push({ task_id: tid, patient_name: patientName(t.patient_id), reason: task.call_ineligible_reason ?? 'Not eligible' })
+          continue
+        }
+        included.push({
+          task_id: tid,
+          patient_id: t.patient_id,
+          patient_name: patientName(t.patient_id),
+          task_type: t.task_type,
+          title: t.title,
+          contact_number: '+910000000000',
+          variables_preview: { patient_name: patientName(t.patient_id), task_type: t.task_type, call_ref: 'preview' },
+        })
+      }
+      return { included, skipped, recipient_count: included.length, trial_note: 'Mock mode — batch create requires live backend.' }
+    }),
+
+  createBatch: () =>
+    latency(() => {
+      throw new ApiError(409, 'batch_not_available', 'Batch calling requires the live backend (not mock mode).', false)
+    }),
+
+  scheduleBatch: () =>
+    latency(() => {
+      throw new ApiError(409, 'batch_not_available', 'Batch scheduling requires the live backend.', false)
+    }),
+
+  stopBatch: () =>
+    latency(() => {
+      throw new ApiError(409, 'batch_not_available', 'Batch stop requires the live backend.', false)
+    }),
+
+  listBatches: () => latency(() => ({ items: [] })),
+
+  getBatch: (batchId) =>
+    latency(() => {
+      notFound('Batch', batchId)
+    }),
+
+  createPatient: () =>
+    latency(() => {
+      throw new ApiError(403, 'forbidden', 'Register patients against the live clinic backend (VITE_JIVANA_MODE=clinic).', false)
+    }),
+
+  createTask: () =>
+    latency(() => {
+      throw new ApiError(403, 'forbidden', 'Create follow-ups against the live clinic backend.', false)
+    }),
+
+  cancelTask: () =>
+    latency(() => {
+      throw new ApiError(403, 'forbidden', 'Cancel follow-ups on the live clinic backend.', false)
+    }),
+
+  createAppointment: () =>
+    latency(() => {
+      throw new ApiError(403, 'forbidden', 'Book appointments against the live clinic backend.', false)
+    }),
+
+  updatePatient: () =>
+    latency(() => {
+      throw new ApiError(403, 'forbidden', 'Edit patients on the live clinic backend.', false)
+    }),
+
+  updateAppointment: () =>
+    latency(() => {
+      throw new ApiError(403, 'forbidden', 'Edit appointments on the live clinic backend.', false)
+    }),
+
+  staffCompleteCall: () =>
+    latency(() => {
+      throw new ApiError(403, 'forbidden', 'Staff call actions require the live backend.', false)
+    }),
+
+  downloadReport: () =>
+    latency(() => {
+      throw new ApiError(403, 'forbidden', 'Exports require the live backend.', false)
     }),
 }

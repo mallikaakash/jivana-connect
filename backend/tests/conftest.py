@@ -51,11 +51,11 @@ class FakeBolna:
         self.fail_with = None
         self.counter = 0
 
-    async def start_call(self, user_data):
+    async def start_call(self, user_data, *, recipient_phone_number=None):
         if self.fail_with:
             raise self.fail_with
         self.counter += 1
-        self.started.append(user_data)
+        self.started.append({"user_data": user_data, "phone": recipient_phone_number})
         return f"exec-{self.counter}"
 
     async def get_execution(self, execution_id):

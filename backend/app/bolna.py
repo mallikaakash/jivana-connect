@@ -61,6 +61,7 @@ _NULLISH = {"", "null", "none", "n/a", "na", "nil", "not_specified", "not specif
 _TRUE = {"true", "yes", "y", "1", "haan", "han", "ha", "done", "acknowledged"}
 _FALSE = {"false", "no", "n", "0", "nahi", "nahin", "not_done", "not done"}
 _VALUE_KEYS = ("value", "answer", "output", "result", "extracted_value")
+_DISPOSITION_KEYS = ("objective", "subjective")
 
 _ENUM_SYNONYMS = {
     "appointment_outcome": {
@@ -98,10 +99,22 @@ def snake(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
 
 
+def _disposition_scalar(value: dict) -> Any:
+    """Bolna extraction dispositions expose objective/subjective strings."""
+    for k in _DISPOSITION_KEYS:
+        if k in value and value[k] is not None:
+            text = str(value[k]).strip()
+            if text.lower() not in _NULLISH:
+                return value[k]
+    return _MISSING
+
+
 def _flatten(data: dict, out: dict, depth: int = 0) -> None:
     for key, value in data.items():
         if isinstance(value, dict):
             inner = next((value[k] for k in _VALUE_KEYS if k in value), _MISSING)
+            if inner is _MISSING:
+                inner = _disposition_scalar(value)
             if inner is not _MISSING:
                 out[snake(str(key))] = inner
             elif depth < 2:
@@ -258,15 +271,25 @@ class BolnaClient:
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.settings.bolna_api_key}", "Content-Type": "application/json"}
 
-    async def start_call(self, user_data: dict[str, str]) -> str:
+    async def start_call(self, user_data: dict[str, str], *, recipient_phone_number: str | None = None) -> str:
+        phone = recipient_phone_number or self.settings.demo_call_recipient
+        if not phone:
+            raise BolnaError("No recipient phone number configured for this call.")
         body: dict[str, Any] = {
             "agent_id": self.settings.bolna_agent_id,
-            "recipient_phone_number": self.settings.demo_call_recipient,
+            "recipient_phone_number": phone,
             "user_data": user_data,
             "bypass_call_guardrails": True,
         }
         if self.settings.bolna_from_number:
             body["from_phone_number"] = self.settings.bolna_from_number
+        if self.settings.bolna_call_retry_enabled:
+            body["retry_config"] = {
+                "enabled": True,
+                "max_retries": 2,
+                "retry_on_statuses": ["no-answer", "busy"],
+                "retry_intervals_minutes": [30, 120],
+            }
         try:
             async with httpx.AsyncClient(timeout=20.0) as client:
                 res = await client.post(f"{self.settings.bolna_base_url}/call", json=body, headers=self._headers())

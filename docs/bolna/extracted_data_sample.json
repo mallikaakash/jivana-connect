@@ -1,0 +1,60 @@
+{
+  "_note": "Shape verified on live execution 851d9399-6e9a-4e24-b372-d2fe40a80092 (2026-10-30) via webhook + Get Execution. Also matches test_dispositions output.",
+  "_live_verified_execution_id": "851d9399-6e9a-4e24-b372-d2fe40a80092",
+  "extracted_data": {
+    "Dental Follow-up Outcome": {
+      "Opt-out Requested": {
+        "objective": "no",
+        "subjective": null
+      },
+      "Patient Feeling": {
+        "objective": "worse",
+        "subjective": null
+      },
+      "Patient Concern": {
+        "objective": null,
+        "subjective": "Pain in tooth after the visit."
+      },
+      "Clinical Question": {
+        "objective": null,
+        "subjective": "not_reported"
+      },
+      "Follow-up Required": {
+        "objective": "yes",
+        "subjective": null
+      },
+      "Callback Requested": {
+        "objective": "yes",
+        "subjective": null
+      },
+      "Preferred Callback Time": {
+        "objective": null,
+        "subjective": "tomorrow afternoon"
+      },
+      "Patient Identity Confirmed": {
+        "objective": "yes",
+        "subjective": null
+      },
+      "Wrong Number": {
+        "objective": "no",
+        "subjective": null
+      },
+      "Call Outcome": {
+        "objective": "callback_requested",
+        "subjective": null
+      }
+    }
+  },
+  "normalised_snake_keys": {
+    "opt_out_requested": "no",
+    "patient_feeling": "worse",
+    "patient_concern": "Pain in tooth after the visit.",
+    "clinical_question": "not_reported",
+    "follow_up_required": "yes",
+    "callback_requested": "yes",
+    "preferred_callback_time": "tomorrow afternoon",
+    "patient_identity_confirmed": "yes",
+    "wrong_number": "no",
+    "call_outcome": "callback_requested"
+  }
+}

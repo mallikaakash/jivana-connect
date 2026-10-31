@@ -1,17 +1,23 @@
 import { ShieldAlert } from 'lucide-react'
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { api, type Escalation } from '@/api'
+import { api, APP_MODE, type Escalation } from '@/api'
+import { staffDisplayName, useStaffRole } from '@/features/clinic/workspace'
 import { PatientSummary } from '@/components/PatientSummary'
 import { Timeline } from '@/components/Timeline'
 import { Card, DemoBadge, DetailList, EmptyState, PageHeader, StatusBadge } from '@/components/ui'
 import { BackLink, LoadGate, Note, RefreshError, TextLink, VoiceModeBadge } from '@/features/secondary/common'
 import { EscalationActions } from '@/features/secondary/EscalationActions'
+import { Transcript } from '@/features/secondary/Transcript'
 import { formatDateTime, label, relativeTime } from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
 
 export default function EscalationDetailPage() {
   const { escalationId = '' } = useParams()
+  const [staffRole] = useStaffRole()
+  const meta = useAsync(() => api.getMeta(), [])
+  const isDoctorClinic = APP_MODE === 'clinic' && staffRole === 'doctor'
+  const staffAuthor = staffDisplayName(meta.data?.clinical_lead_label)
   const { data, error, loading, reload } = useAsync(() => api.getEscalation(escalationId), [escalationId])
   // Escalation as returned by the latest PATCH response. It applies only to the detail payload it was made against,
   // so once the follow-up refetch (with fresh events) lands, that newer payload wins.
@@ -20,7 +26,7 @@ export default function EscalationDetailPage() {
   if (!data) {
     return (
       <div>
-        <BackLink to="/escalations">Escalations</BackLink>
+        <BackLink to="/escalations">{isDoctorClinic ? 'Clinical review' : 'Escalations'}</BackLink>
         <LoadGate
           data={data}
           error={error}
@@ -38,12 +44,12 @@ export default function EscalationDetailPage() {
 
   return (
     <div>
-      <BackLink to="/escalations">Escalations</BackLink>
+      <BackLink to="/escalations">{isDoctorClinic ? 'Clinical review' : 'Escalations'}</BackLink>
       <PageHeader
         title={escalation.reason}
         subtitle={
           <span className="inline-flex flex-wrap items-center gap-2">
-            Created {relativeTime(escalation.created_at)} · {formatDateTime(escalation.created_at)} <DemoBadge />
+            Created {relativeTime(escalation.created_at)} · {formatDateTime(escalation.created_at)} {APP_MODE !== 'clinic' && <DemoBadge />}
           </span>
         }
         actions={
@@ -57,10 +63,18 @@ export default function EscalationDetailPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <Card title="Patient-reported concern">
-            <blockquote className="rounded-xl border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-slate-800">
+          <Card title={isDoctorClinic ? 'What the patient said' : 'Patient-reported concern'}>
+            <blockquote className="rounded-xl border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-base leading-relaxed font-medium text-navy-900">
               {escalation.concern_summary}
             </blockquote>
+            {call?.transcript && call.transcript.length > 0 && (
+              <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <summary className="cursor-pointer text-sm font-medium text-navy-800">Transcript</summary>
+                <div className="mt-2 max-h-64 overflow-y-auto">
+                  <Transcript turns={call.transcript.slice(-8)} />
+                </div>
+              </details>
+            )}
             <div className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
               <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-navy-500" />
               <span>Jiya does not diagnose or give treatment advice; this concern was routed for human review.</span>
@@ -70,7 +84,9 @@ export default function EscalationDetailPage() {
                 items={[
                   { label: 'Reason', value: escalation.reason },
                   { label: 'Priority', value: <StatusBadge value={escalation.priority} /> },
-                  { label: 'Routing destination', value: escalation.routing_destination },
+                  ...(isDoctorClinic
+                    ? []
+                    : [{ label: 'Assigned clinic team', value: escalation.routing_destination }]),
                   { label: 'Assigned to', value: escalation.assigned_to ?? <span className="text-slate-400">Unassigned</span> },
                   { label: 'Status', value: <StatusBadge value={escalation.status} /> },
                   { label: 'Last updated', value: formatDateTime(escalation.updated_at) },
@@ -84,7 +100,7 @@ export default function EscalationDetailPage() {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <TextLink to={`/calls/${call.call_id}`}>{call.purpose}</TextLink>
-                  <VoiceModeBadge isLive={call.is_live} />
+                  {APP_MODE !== 'clinic' && <VoiceModeBadge isLive={call.is_live} />}
                   <StatusBadge value={call.status} />
                   {call.outcome && <StatusBadge value={call.outcome} />}
                 </div>
@@ -126,6 +142,9 @@ export default function EscalationDetailPage() {
           <Card title="Actions">
             <EscalationActions
               escalation={escalation}
+              author={APP_MODE === 'clinic' ? staffAuthor : undefined}
+              requireResolutionNote={isDoctorClinic}
+              requireResolutionType={APP_MODE === 'clinic'}
               onUpdated={(e) => {
                 setFromAction({ base: data, escalation: e })
                 void reload()

@@ -57,6 +57,10 @@ for up to 10 min, in case the webhook can't reach you. Both feed the same idempo
 The Jiya agent itself is **not** created by this repo. Drafts to paste into Bolna:
 `bolna/jiya_prompt.md` (system prompt) and `bolna/extraction.md` (extraction fields).
 
+Live agent export (no secrets): `docs/bolna/jiya-live-config.md`. Webhook extractions are mapped
+to CONTRACT fields in `app/bolna_mapper.py` before `process_call_result`. Step-by-step live testing:
+`docs/bolna/LIVE_RUNBOOK.md`.
+
 ## Exposing the webhook (live mode)
 
 ```bash

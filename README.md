@@ -18,6 +18,7 @@ The hosted demo runs in **offline mock mode**: synthetic patient data, with call
 | `backend/` | FastAPI workflow service: simulated or live Bolna calls, idempotent webhook, in-memory store (optional MongoDB). See `backend/README.md` |
 | `shared/seed.json` | Synthetic demo dataset used by both sides |
 | `docs/CONTRACT.md` | Single source of truth for statuses, record shapes, workflow rules and the API |
+| `docs/bolna/` | Live Jiya config export, extraction sample, [live runbook](docs/bolna/LIVE_RUNBOOK.md) |
 | `docs/Jivana_Connect_UI_Frontend_Specification.pdf` | Product / UI spec |
 | `backend/bolna/` | Jiya prompt and extraction drafts |
 
@@ -34,12 +35,18 @@ cd frontend && npm install && npm run dev
 cd frontend && VITE_API_MODE=mock npm run dev
 ```
 
-Calls are simulated unless `BOLNA_API_KEY`, `BOLNA_AGENT_ID` and `DEMO_CALL_RECIPIENT` are set in `backend/.env` (see `backend/.env.example`).
+Calls are simulated unless `BOLNA_API_KEY`, `BOLNA_AGENT_ID` and `DEMO_CALL_RECIPIENT` are set in `backend/.env` (see `backend/.env.example`). For a live test checklist: `docs/bolna/LIVE_RUNBOOK.md` and `cd backend && uv run python scripts/check_live_ready.py`.
+
+Staff UI also includes **Batches** (preview → create → schedule) when the backend is live; mock mode on Vercel supports preview only.
+
+```bash
+npm run test:ci   # pytest + frontend production build
+```
 
 ## Deploy
 
-- **Frontend:** Vercel. Run `VITE_API_MODE=mock npx vite build` in `frontend/`, then `vercel deploy --prod` from the build output. That folder needs a `vercel.json` with a catch-all rewrite to `/index.html` so deep links work.
-- **Backend:** Google Cloud Run, using the root `Dockerfile` (`gcloud run deploy jivana-api --source . --no-cpu-throttling --min-instances=1 --max-instances=1`). The always-on, single-instance flags keep simulated calls, Bolna polling and the in-memory store working.
+- **Clinic production (GCP):** First-time Atlas/Firebase CLI: [`docs/YOUR_TURN_SETUP.md`](docs/YOUR_TURN_SETUP.md). After that: [`docs/FINISH_SETUP.md`](docs/FINISH_SETUP.md) (browser-only steps) + `npm run deploy:clinic`. Reference: [`docs/DEPLOY_GCP.md`](docs/DEPLOY_GCP.md).
+- **Hackathon demo:** **Frontend** on Vercel with `VITE_API_MODE=mock`. **Backend** optional on Cloud Run: `gcloud run deploy jivana-api --source . --no-cpu-throttling --min-instances=1 --max-instances=1` (simulated voice + in-memory/Mongo).
 
 ---
 

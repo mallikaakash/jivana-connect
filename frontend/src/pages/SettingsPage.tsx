@@ -1,8 +1,9 @@
 import { CheckCircle2, Info, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
-import { api, API_MODE } from '@/api'
+import { api, API_MODE, APP_MODE } from '@/api'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Button, Card, DemoBadge, DetailList, EmptyState, ErrorBanner, PageHeader, StatusBadge } from '@/components/ui'
+import { ClinicDemoSeedPanel } from '@/features/clinic/ClinicDemoSeedPanel'
 import { LoadGate, Note, RefreshError } from '@/features/secondary/common'
 import { label } from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
@@ -42,30 +43,82 @@ export default function SettingsPage() {
       <PageHeader
         title="Settings"
         subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Read-only view of the demo configuration. <DemoBadge>Prototype</DemoBadge>
-          </span>
+          APP_MODE === 'clinic' ? (
+            'Exports and training data for your clinic workspace.'
+          ) : (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              Read-only view of the demo configuration. <DemoBadge>Prototype</DemoBadge>
+            </span>
+          )
         }
       />
 
-      <div className="mb-6 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-        <Info className="mt-0.5 h-4 w-4 shrink-0" />
-        <p>
-          This page only displays how the prototype is running. There are no editable configuration controls here; integrations marked “Not configured” are
-          placeholders and are not operational.
-        </p>
-      </div>
+      {APP_MODE !== 'clinic' && (
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            This page only displays how the prototype is running. There are no editable configuration controls here; integrations marked “Not configured” are
+            placeholders and are not operational.
+          </p>
+        </div>
+      )}
 
       <RefreshError error={meta ? error : undefined} reload={reload} />
       <LoadGate data={meta} error={error} loading={loading} reload={reload} />
 
-      {meta && (
+      {meta && meta.app_mode === 'clinic' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {meta.clinical_lead_label && (
+            <Card title="Your clinic">
+              <DetailList items={[{ label: 'Clinical lead', value: meta.clinical_lead_label }]} />
+            </Card>
+          )}
+
+          <Card title="Follow-up types Jiya can place">
+            {meta.workflows.length === 0 ? (
+              <EmptyState title="None listed" />
+            ) : (
+              <ul className="space-y-2">
+                {meta.workflows.map((w) => (
+                  <li key={w} className="flex items-center gap-2 text-sm text-slate-700">
+                    <CheckCircle2 className="h-4 w-4 text-teal-600" />
+                    {label(w)}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Note className="mt-4">Appointment reminders, check-ins, test reminders, and callbacks use the same Jiya assistant with context for each patient.</Note>
+          </Card>
+
+          {meta.demo_seed_available && (
+            <Card title="Sample walkthrough data" className="lg:col-span-2">
+              <ClinicDemoSeedPanel />
+            </Card>
+          )}
+
+          <Card title="Exports" className="lg:col-span-2">
+            <p className="text-sm text-slate-600">Download lists of patients, calls, or follow-up tasks as CSV.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {(['patients', 'calls', 'tasks'] as const).map((kind) => (
+                <Button key={kind} variant="secondary" onClick={() => void api.downloadReport(kind)}>
+                  {label(kind)}
+                </Button>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {meta && meta.app_mode !== 'clinic' && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card title="Environment">
             <DetailList
               items={[
                 { label: 'Environment', value: <StatusBadge value={meta.environment} tone="blue" text={label(meta.environment)} /> },
-                { label: 'Data mode', value: `${label(meta.data_mode)} — synthetic patients only` },
+                {
+                  label: 'Data mode',
+                  value: `${label(meta.data_mode)} — synthetic patients only`,
+                },
                 {
                   label: 'Jiya voice mode',
                   value: (
@@ -120,6 +173,7 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {meta?.app_mode !== 'clinic' && (
       <Card title="Demo data" className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="max-w-xl text-sm text-slate-600">
@@ -141,6 +195,7 @@ export default function SettingsPage() {
           </p>
         )}
       </Card>
+      )}
 
       <ConfirmDialog
         open={confirmOpen}

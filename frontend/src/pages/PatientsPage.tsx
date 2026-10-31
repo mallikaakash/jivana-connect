@@ -1,9 +1,11 @@
 import { Search } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, ATTENTION_STATUSES, type AttentionStatus, type PatientListItem } from '@/api'
+import { api, APP_MODE, ATTENTION_STATUSES, type AttentionStatus, type PatientListItem } from '@/api'
+import { CreatePatientDialog } from '@/features/clinic/CreatePatientDialog'
+import { useStaffRole } from '@/features/clinic/workspace'
 import { DataTable, type Column } from '@/components/DataTable'
-import { Card, DemoBadge, PageHeader, StatusBadge } from '@/components/ui'
+import { Button, Card, DemoBadge, PageHeader, StatusBadge } from '@/components/ui'
 import { FilterSelect, LoadGate, RefreshError } from '@/features/secondary/common'
 import { useDebounced } from '@/features/secondary/helpers'
 import { formatDateTime, label, relativeTime } from '@/lib/format'
@@ -20,7 +22,11 @@ const columns: Column<PatientListItem>[] = [
     render: (p) => (
       <div>
         <div className="font-medium text-navy-800">{p.display_name}</div>
-        <div className="text-xs text-slate-500">{p.demo_id}</div>
+        {APP_MODE === 'clinic' ? (
+          p.demo_id ? <div className="text-xs text-slate-500">Chart {p.demo_id}</div> : null
+        ) : (
+          <div className="text-xs text-slate-500">{p.demo_id}</div>
+        )}
       </div>
     ),
   },
@@ -59,10 +65,13 @@ const columns: Column<PatientListItem>[] = [
 
 export default function PatientsPage() {
   const navigate = useNavigate()
+  const [staffRole] = useStaffRole()
+  const canRegister = APP_MODE === 'clinic' && staffRole === 'desk'
   const [search, setSearch] = useState('')
   const [attention, setAttention] = useState<AttentionFilter>('all')
   const q = useDebounced(search.trim(), 300)
 
+  const [addOpen, setAddOpen] = useState(false)
   const { data, error, loading, reload } = useAsync(
     () => api.listPatients({ q: q || undefined, attention_status: attention === 'all' ? undefined : attention }),
     [q, attention],
@@ -78,11 +87,19 @@ export default function PatientsPage() {
       <PageHeader
         title="Patients"
         subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Synthetic patient directory for the demo. <DemoBadge />
-          </span>
+          APP_MODE === 'clinic' ? (
+            staffRole === 'desk'
+              ? 'Register patients with mobile numbers and consent before scheduling Jiya follow-ups.'
+              : 'Patient directory — open a profile for call history and clinical review links.'
+          ) : (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              Synthetic patient directory for the demo. <DemoBadge />
+            </span>
+          )
         }
+        actions={canRegister ? <Button onClick={() => setAddOpen(true)}>Register patient</Button> : undefined}
       />
+      <CreatePatientDialog open={addOpen} onClose={() => setAddOpen(false)} onCreated={() => void reload()} />
       <Card title="Patient directory" actions={loading && data ? <span className="text-xs text-slate-400">Refreshing…</span> : undefined}>
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="relative w-full sm:w-72">
@@ -91,8 +108,8 @@ export default function PatientsPage() {
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or demo ID"
-              aria-label="Search patients by name or demo ID"
+              placeholder={APP_MODE === 'clinic' ? 'Search by name or chart number' : 'Search by name or demo ID'}
+              aria-label={APP_MODE === 'clinic' ? 'Search patients by name or chart number' : 'Search patients by name or demo ID'}
               className="w-full rounded-xl border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
@@ -111,9 +128,15 @@ export default function PatientsPage() {
             rows={rows}
             rowKey={(p) => p.patient_id}
             onRowClick={(p) => navigate(`/patients/${p.patient_id}`)}
-            emptyTitle={filtered ? 'No patients match these filters' : 'No patients in the demo dataset'}
+            emptyTitle={filtered ? 'No patients match these filters' : APP_MODE === 'clinic' ? 'No patients registered yet' : 'No patients in the demo dataset'}
             emptyDescription={
-              filtered ? 'Try a different name or demo ID, or clear the attention filter.' : 'Reset demo data from Settings to restore the seeded patients.'
+              filtered
+                ? APP_MODE === 'clinic'
+                  ? 'Try a different name or chart number, or clear the attention filter.'
+                  : 'Try a different name or demo ID, or clear the attention filter.'
+                : APP_MODE === 'clinic'
+                  ? 'Front desk can register the first patient from this page.'
+                  : 'Reset demo data from Settings to restore the seeded patients.'
             }
           />
         )}

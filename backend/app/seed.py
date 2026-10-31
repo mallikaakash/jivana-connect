@@ -19,7 +19,7 @@ from .timeutil import IST
 _REL_DAY = re.compile(r"^rel:([+-]?\d+)d@(\d{1,2}):(\d{2})$")
 _REL_MIN = re.compile(r"^rel:([+-]?\d+)m$")
 
-COLLECTIONS = ("patients", "appointments", "tasks", "calls", "escalations", "events")
+COLLECTIONS = ("patients", "appointments", "tasks", "calls", "escalations", "events", "batches", "batch_members")
 
 
 def resolve_rel(value: str, now: datetime | None = None) -> str:

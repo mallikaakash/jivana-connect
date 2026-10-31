@@ -9,12 +9,19 @@
     "implement:cloud": "node scripts/implement-spec.mjs --engine cursor --cloud --detach",
     "monitor": "node scripts/monitor-run.mjs",
     "cursor:login": "node scripts/cursor-auth.mjs --login",
-    "cursor:auth": "node scripts/cursor-auth.mjs"
+    "cursor:auth": "node scripts/cursor-auth.mjs",
+    "test:ci": "cd backend && uv run pytest -q && cd ../frontend && npm ci && npm run build",
+    "deploy:gcp": "./scripts/deploy-gcp-clinic.sh",
+    "deploy:hosting": "./scripts/deploy-firebase-clinic.sh",
+    "deploy:clinic": "./scripts/deploy-clinic-production.sh",
+    "smoke:prod": "./scripts/smoke-prod.sh",
+    "firebase:login": "firebase login"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "@cursor/sdk": "^1.2.0"
+    "@cursor/sdk": "^1.2.0",
+    "firebase-tools": "^13.35.1"
   }
 }

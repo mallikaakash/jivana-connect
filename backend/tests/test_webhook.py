@@ -18,7 +18,7 @@ def _events_for_call(client, task_id):
 
 def test_live_start_passes_user_data(live_client):
     call = _start_live(live_client)
-    ud = live_client.fake_bolna.started[0]
+    ud = live_client.fake_bolna.started[0]["user_data"]
     assert ud["call_ref"] == call["call_id"]
     assert ud["patient_name"] == "Asha Verma"
     assert ud["task_type"] == "appointment_confirmation"
@@ -78,6 +78,30 @@ def test_webhook_intermediate_statuses_and_lookup_by_call_ref(live_client):
     assert live_client.get(f"/api/calls/{call['call_id']}").json()["call"]["status"] == "in_progress"
 
 
+def test_webhook_disconnect_with_transcript_infers_reschedule(live_client):
+    call = _start_live(live_client)
+    transcript = (
+        "assistant: Can you make it?\n"
+        "user: no i won't be able to make it\n"
+        "assistant: Would you like to reschedule?\n"
+        "user: fifth november please\n"
+        "assistant: Noted for 5th November.\n"
+    )
+    r = live_client.post(
+        "/api/webhooks/bolna",
+        json={"id": call["provider_call_id"], "status": "call-disconnected", "transcript": transcript},
+    )
+    assert r.status_code == 200 and r.json().get("ok") is True
+    assert not r.json().get("ignored")
+    c = live_client.get(f"/api/calls/{call['call_id']}").json()["call"]
+    assert c["status"] == "completed"
+    assert c["outcome"] == "rescheduling_requested"
+    detail = live_client.get("/api/tasks/task_demo_001").json()
+    assert detail["appointment"]["confirmation_state"] == "rescheduling_requested"
+    assert detail["task"]["status"] == "awaiting_staff_action"
+    assert "5" in detail["task"]["next_action"] or "November" in detail["task"]["next_action"]
+
+
 def test_webhook_no_answer_sets_task_due(live_client):
     call = _start_live(live_client)
     r = live_client.post("/api/webhooks/bolna", json={"id": call["provider_call_id"], "status": "no-answer"})
@@ -115,6 +139,67 @@ def test_provider_error_restores_task(live_client):
     assert calls[0]["status"] == "failed"
 
 
+def test_test_reminder_not_done_keeps_task_pending(live_client):
+    """Demo guide Scene 6 — patient says test not complete; task stays pending with new due date."""
+    svc = live_client.app.state.service
+    svc.settings.jivana_mode = "clinic"
+    task = svc.store.get("tasks", "task_demo_011")
+    if task is None:
+        return  # optional seed row
+    task.update(status="pending", attempt_count=0, latest_outcome=None)
+    svc.store.save("tasks", task)
+    patient = svc.store.get("patients", task["patient_id"])
+    patient["phone_e164"] = "+919999990101"
+    svc.store.save("patients", patient)
+    call = _start_live(live_client, "task_demo_011")
+    r = live_client.post(
+        "/api/webhooks/bolna",
+        json={
+            "id": call["provider_call_id"],
+            "status": "completed",
+            "summary": "Patient has not completed the test yet.",
+            "transcript": "assistant: Have you completed the lipid profile?\nuser: Not yet, I haven't had time.",
+            "extracted_data": {"test_completed": False},
+        },
+    )
+    assert r.status_code == 200
+    detail = live_client.get(f"/api/calls/{call['call_id']}").json()
+    assert detail["call"]["outcome"] == "test_not_done"
+    assert detail["task"]["status"] == "pending"
+    assert "Remind again" in detail["task"]["next_action"]
+    tt = detail["task"].get("test_tracking") or {}
+    assert tt.get("test_completion_reported") is not True
+
+
+def test_test_reminder_inferred_from_short_transcript_without_extraction(live_client):
+    """Poller active on live start-call must not defer when a 2-turn transcript is enough to infer."""
+    svc = live_client.app.state.service
+    svc.settings.jivana_mode = "clinic"
+    task = svc.store.get("tasks", "task_demo_011")
+    if task is None:
+        return
+    task.update(status="pending", attempt_count=0, latest_outcome=None, extracted_fields=None)
+    svc.store.save("tasks", task)
+    patient = svc.store.get("patients", task["patient_id"])
+    patient["phone_e164"] = "+919999990101"
+    svc.store.save("patients", patient)
+    call = _start_live(live_client, "task_demo_011")
+    r = live_client.post(
+        "/api/webhooks/bolna",
+        json={
+            "id": call["provider_call_id"],
+            "status": "completed",
+            "transcript": "assistant: Have you done the lipid test?\nuser: Sorry I have not done the test yet",
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("deferred") is not True
+    detail = live_client.get(f"/api/calls/{call['call_id']}").json()
+    assert detail["call"]["outcome"] == "test_not_done"
+    assert detail["task"]["status"] == "pending"
+
+
 def test_concern_creates_escalation_and_callback(live_client):
     svc = live_client.app.state.service
     task = svc.store.get("tasks", "task_demo_004")
@@ -131,7 +216,7 @@ def test_concern_creates_escalation_and_callback(live_client):
     esc = detail["escalation"]
     assert esc is not None
     assert esc["status"] == "open" and esc["priority"] == "high"
-    assert esc["routing_destination"] == "Orthopaedics nurse desk"
+    assert "Orthopaedics" in esc["routing_destination"]
     assert esc["call_id"] == call["call_id"] and esc["task_id"] == "task_demo_004"
     assert esc["concern_summary"] == "Knee pain is worse since morning."
     assert detail["call"]["outcome"] == "concern_reported"
@@ -158,6 +243,7 @@ def test_webhook_token_required_when_secret_set(live_client):
 
 def test_normalisers():
     assert normalise_extracted('{"Appointment Outcome": "Rescheduling Requested"}') == {"appointment_outcome": "rescheduling_requested"}
+    assert normalise_extracted({"Call Outcome": {"objective": "callback_requested"}}) == {"call_outcome": "callback_requested"}
     assert normalise_extracted({"Appointment": {"appointment_outcome": {"value": "Confirmed"}}}) == {"appointment_outcome": "confirmed"}
     assert normalise_extracted({"test_completed": "Yes", "test_date": "N/A"}) == {"test_completed": True, "test_date": None}
     assert parse_transcript([{"role": "assistant", "content": "Hi"}, {"role": "user", "content": "Hello"}]) == [

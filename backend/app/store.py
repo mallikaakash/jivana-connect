@@ -22,6 +22,8 @@ ID_FIELDS = {
     "calls": "call_id",
     "escalations": "escalation_id",
     "events": "event_id",
+    "batches": "batch_id",
+    "batch_members": "member_id",
 }
 
 

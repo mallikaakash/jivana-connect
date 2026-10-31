@@ -1,8 +1,13 @@
-import { useParams } from 'react-router-dom'
-import { api, type Appointment, type Call, type Escalation, type Task } from '@/api'
+import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { api, APP_MODE, type Appointment, type Call, type Escalation, type Task } from '@/api'
+import { useStaffRole } from '@/features/clinic/workspace'
+import { CreateAppointmentDialog } from '@/features/clinic/CreateAppointmentDialog'
+import { CreateFollowUpDialog } from '@/features/clinic/CreateFollowUpDialog'
+import { EditPatientDialog } from '@/features/clinic/EditPatientDialog'
 import { PatientSummary } from '@/components/PatientSummary'
 import { Timeline } from '@/components/Timeline'
-import { Card, DemoBadge, DetailList, EmptyState, PageHeader, StatusBadge } from '@/components/ui'
+import { Button, Card, DemoBadge, DetailList, EmptyState, PageHeader, StatusBadge } from '@/components/ui'
 import { appointmentNextStep } from '@/features/secondary/appointmentNextStep'
 import { BackLink, LoadGate, RefreshError, TextLink, VoiceModeBadge } from '@/features/secondary/common'
 import { comparePriority, formatDateTime, label, relativeTime } from '@/lib/format'
@@ -62,7 +67,7 @@ function TaskItem({ task }: { task: Task }) {
   )
 }
 
-function CallItem({ call }: { call: Call }) {
+function CallItem({ call, clinic }: { call: Call; clinic: boolean }) {
   return (
     <li className="py-3 first:pt-0 last:pb-0">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -73,7 +78,7 @@ function CallItem({ call }: { call: Call }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <VoiceModeBadge isLive={call.is_live} />
+          {!clinic && <VoiceModeBadge isLive={call.is_live} />}
           <StatusBadge value={call.status} />
           {call.outcome && <StatusBadge value={call.outcome} />}
         </div>
@@ -104,6 +109,11 @@ function EscalationItem({ esc }: { esc: Escalation }) {
 
 export default function PatientDetailPage() {
   const { patientId = '' } = useParams()
+  const navigate = useNavigate()
+  const [staffRole] = useStaffRole()
+  const [followUpOpen, setFollowUpOpen] = useState(false)
+  const [apptOpen, setApptOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const { data, error, loading, reload } = useAsync(() => api.getPatient(patientId), [patientId])
 
   const gate = (
@@ -134,10 +144,47 @@ export default function PatientDetailPage() {
       <PageHeader
         title={patient.display_name}
         subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            {patient.demo_id} <DemoBadge>Synthetic patient</DemoBadge>
-          </span>
+          APP_MODE === 'clinic' ? (
+            patient.demo_id ? `Chart ${patient.demo_id}` : 'Registered patient'
+          ) : (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              {patient.demo_id} <DemoBadge>Synthetic patient</DemoBadge>
+            </span>
+          )
         }
+        actions={
+          APP_MODE === 'clinic' && staffRole === 'desk' ? (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => setEditOpen(true)}>
+                Edit patient
+              </Button>
+              <Button variant="secondary" onClick={() => setApptOpen(true)}>
+                Book appointment
+              </Button>
+              <Button onClick={() => setFollowUpOpen(true)}>Schedule follow-up call</Button>
+            </div>
+          ) : undefined
+        }
+      />
+      <EditPatientDialog open={editOpen} patient={patient} onClose={() => setEditOpen(false)} onSaved={() => void reload()} />
+      <CreateAppointmentDialog
+        open={apptOpen}
+        defaultPatientId={patient.patient_id}
+        onClose={() => setApptOpen(false)}
+        onCreated={(_id, taskId) => {
+          void reload()
+          if (taskId) navigate(`/tasks/${taskId}`)
+        }}
+      />
+      <CreateFollowUpDialog
+        open={followUpOpen}
+        patientId={patient.patient_id}
+        patientName={patient.display_name}
+        onClose={() => setFollowUpOpen(false)}
+        onCreated={(taskId) => {
+          void reload()
+          navigate(`/tasks/${taskId}`)
+        }}
       />
       <RefreshError error={error} reload={reload} />
 
@@ -187,7 +234,7 @@ export default function PatientDetailPage() {
             ) : (
               <ul className="divide-y divide-slate-100">
                 {recentCalls.map((c) => (
-                  <CallItem key={c.call_id} call={c} />
+                  <CallItem key={c.call_id} call={c} clinic={APP_MODE === 'clinic'} />
                 ))}
               </ul>
             )}

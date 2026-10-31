@@ -9,6 +9,7 @@ export const BOOKING_STATUSES = ['scheduled', 'cancelled', 'completed'] as const
 export const ESCALATION_STATUSES = ['open', 'acknowledged', 'assigned', 'resolved'] as const
 export const ESCALATION_ACTIONS = ['acknowledge', 'assign', 'add_note', 'resolve'] as const
 export const ATTENTION_STATUSES = ['ok', 'needs_attention', 'urgent'] as const
+export const BATCH_STATUSES = ['draft', 'validated', 'scheduled', 'running', 'completed', 'stopped', 'failed'] as const
 
 export type CallStatus = (typeof CALL_STATUSES)[number]
 export type TaskStatus = (typeof TASK_STATUSES)[number]
@@ -20,6 +21,8 @@ export type BookingStatus = (typeof BOOKING_STATUSES)[number]
 export type EscalationStatus = (typeof ESCALATION_STATUSES)[number]
 export type EscalationAction = (typeof ESCALATION_ACTIONS)[number]
 export type AttentionStatus = (typeof ATTENTION_STATUSES)[number]
+export type BatchStatus = (typeof BATCH_STATUSES)[number]
+export type BatchMemberStatus = 'pending' | 'queued' | 'in_progress' | 'completed' | 'failed' | 'skipped'
 export type CallOutcome =
   | AppointmentOutcome
   | 'test_completion_reported'
@@ -52,6 +55,8 @@ export interface Patient {
   contact_ref: string
   phone_masked: string
   contact_permitted: boolean
+  opt_out_at?: string | null
+  wrong_number_at?: string | null
   attention_status: AttentionStatus
   created_at: string
 }
@@ -71,6 +76,10 @@ export interface Appointment {
   booking_status: BookingStatus
   confirmation_state: ConfirmationState
   task_id: string | null
+  confirmation_note?: string | null
+  /** Patient asked for this slot on a call; booking row unchanged until staff rebook. */
+  requested_slot?: string | null
+  requested_slot_task_id?: string | null
 }
 
 export interface TestTracking {
@@ -100,6 +109,7 @@ export interface Task {
   test_tracking: TestTracking | null
   callback_window: string | null
   escalation_id: string | null
+  spawned_followup_task_id?: string | null
   call_eligible: boolean
   call_ineligible_reason: string | null
   created_at: string
@@ -139,6 +149,13 @@ export interface EscalationNote {
   created_at: string
 }
 
+export type EscalationResolutionType =
+  | 'called_patient'
+  | 'advised_come_in'
+  | 'not_clinical'
+  | 'referred_elsewhere'
+  | 'admin_handled'
+
 export interface Escalation {
   escalation_id: string
   patient_id: string
@@ -150,6 +167,7 @@ export interface Escalation {
   status: EscalationStatus
   routing_destination: string
   assigned_to: string | null
+  resolution_type: EscalationResolutionType | null
   notes: EscalationNote[]
   created_at: string
   updated_at: string
@@ -168,16 +186,29 @@ export interface Event {
 
 export type WithPatientName<T> = T & { patient_name: string }
 
+export type InboxAudience = 'clinical' | 'operations'
+
 export interface NeedsAttentionItem {
   kind: 'overdue_task' | 'rescheduling_request' | 'patient_concern' | 'callback_request' | 'awaiting_staff_action'
+  audience: InboxAudience
   task_id: string
   patient_id: string
   patient_name: string
   title: string
   reason: string
+  clinical_snippet: string | null
   priority: Priority
   due_at: string
   escalation_id: string | null
+  task_type: TaskType
+}
+
+export interface SystemAlert {
+  severity: 'high' | 'medium' | 'low'
+  kind: string
+  message: string
+  entity_type: 'patient' | 'appointment' | 'task' | 'call' | 'escalation' | 'system'
+  entity_id: string
 }
 
 export interface DashboardSummary {
@@ -186,17 +217,84 @@ export interface DashboardSummary {
   calls_completed_count: number
   open_escalations_count: number
   needs_attention: NeedsAttentionItem[]
+  clinical_inbox: NeedsAttentionItem[]
+  operations_inbox: NeedsAttentionItem[]
   recent_calls: WithPatientName<Call>[]
   followup_queue: WithPatientName<Task>[]
   recent_activity: Event[]
+  system_alerts: SystemAlert[]
+}
+
+export interface DailyConfirmationBatchPreview {
+  appointment_date: string
+  batch_time_ist: string
+  task_ids: string[]
+  recipient_count: number
+  included: BatchPreviewResult['included']
+  skipped: BatchPreviewResult['skipped']
+  already_scheduled_today: boolean
+  trial_note?: string | null
+}
+
+export interface DailyConfirmationBatchRunResult {
+  ok: boolean
+  trigger: string
+  appointment_date: string
+  scheduled_at: string
+  batch: Batch
+  recipient_count: number
+  skipped: BatchPreviewResult['skipped']
 }
 
 export interface Meta {
-  environment: 'demo'
-  data_mode: 'seeded'
-  voice_mode: 'live' | 'simulated'
+  environment: 'demo' | 'clinic'
+  app_mode: 'demo' | 'clinic'
+  clinic_name: string | null
+  staff_role_default?: 'doctor' | null
+  clinical_lead_label?: string | null
+  features?: { appointments: boolean }
+  auth_required?: boolean
+  auth_methods?: ('api_key' | 'firebase')[]
+  reviewer_sign_in?: {
+    title: string
+    detail: string
+    access_key: string
+  }
+  demo_seed_available?: boolean
+  daily_confirmation_batch?: {
+    enabled: boolean
+    batch_time_ist: string
+    auto_dial_enabled: boolean
+    description: string
+  } | null
+  dial_override_active?: boolean
+  auto_dial_enabled?: boolean
+  data_mode: 'seeded' | 'live'
+  voice_mode: 'live' | 'simulated' | 'unconfigured'
   workflows: TaskType[]
   integrations: { name: string; status: 'live' | 'simulated' | 'not_configured'; detail: string }[]
+}
+
+export interface CreatePatientInput {
+  display_name: string
+  phone_e164: string
+  language?: 'hi' | 'en' | 'hinglish'
+  contact_permitted?: boolean
+  chart_number?: string
+  age?: number
+}
+
+export interface CreateTaskInput {
+  patient_id: string
+  task_type: TaskType
+  title: string
+  purpose: string
+  call_context: string
+  due_at: string
+  department?: string
+  priority?: Priority
+  appointment_scheduled_at?: string
+  appointment_clinician?: string
 }
 
 export interface PatientDetail {
@@ -214,6 +312,7 @@ export interface TaskDetail {
   appointment: Appointment | null
   calls: Call[]
   events: Event[]
+  spawned_followup: Task | null
 }
 
 export interface CallDetail {
@@ -248,4 +347,84 @@ export interface EscalationPatch {
   assigned_to?: string
   note?: string
   author?: string
+  resolution_type?: EscalationResolutionType
+}
+
+export interface CreateAppointmentInput {
+  patient_id: string
+  scheduled_at: string
+  department?: string
+  clinician?: string
+  spawn_confirmation_task?: boolean
+}
+
+export interface UpdatePatientInput {
+  display_name?: string
+  phone_e164?: string
+  language?: 'hi' | 'en' | 'hinglish'
+  contact_permitted?: boolean
+  chart_number?: string
+  age?: number | null
+}
+
+export interface UpdateAppointmentInput {
+  scheduled_at?: string
+  department?: string
+  clinician?: string
+  booking_status?: 'scheduled' | 'cancelled' | 'completed'
+}
+
+export interface StaffCallPatch {
+  action: 'staff_complete'
+  outcome?: string
+  summary?: string
+  note?: string
+  author?: string
+}
+
+export interface Batch {
+  batch_id: string
+  bolna_batch_id: string | null
+  title: string
+  status: BatchStatus
+  bolna_status: string | null
+  scheduled_at: string | null
+  recipient_count: number
+  completed_count: number
+  failed_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface BatchMember {
+  member_id: string
+  batch_id: string
+  task_id: string
+  patient_id: string
+  call_id: string | null
+  execution_id: string | null
+  status: BatchMemberStatus
+  created_at: string
+}
+
+export interface BatchPreviewRow {
+  task_id: string
+  patient_id: string
+  patient_name: string
+  task_type: TaskType
+  title: string
+  contact_number: string
+  variables_preview: Record<string, string>
+}
+
+export interface BatchPreviewResult {
+  included: BatchPreviewRow[]
+  skipped: { task_id: string; patient_name?: string; reason: string }[]
+  recipient_count: number
+  trial_note?: string | null
+}
+
+export interface BatchDetail {
+  batch: Batch
+  members: BatchMember[]
 }

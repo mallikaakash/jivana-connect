@@ -56,6 +56,24 @@ const LABEL_OVERRIDES: Record<string, string> = {
   ok: 'OK',
 }
 
+/** Plain-language call/task outcomes for clinic staff and doctors. */
+const CLINIC_OUTCOME_LABELS: Record<string, string> = {
+  unable_to_confirm: 'Could not confirm on call',
+  concern_reported: 'Patient reported a concern',
+  rescheduling_requested: 'Patient asked to reschedule',
+  callback_requested: 'Patient asked for a callback',
+  routine_ok: 'Routine check-in — no concerns',
+  no_answer: 'No answer',
+  declined: 'Patient declined',
+  confirmed: 'Appointment confirmed',
+}
+
+export function outcomeLabel(value: string | null | undefined, clinicMode = false): string {
+  if (!value) return '—'
+  if (clinicMode && CLINIC_OUTCOME_LABELS[value]) return CLINIC_OUTCOME_LABELS[value]
+  return label(value)
+}
+
 /** snake_case → "Sentence case". */
 export function label(value: string | null | undefined): string {
   if (!value) return '—'

@@ -1,13 +1,14 @@
 import clsx from 'clsx'
 import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
-import { api, PRIORITIES, TASK_STATUSES, TASK_TYPES, type Priority, type Task, type TaskFilters, type TaskStatus, type TaskType, type WithPatientName } from '@/api'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
+import { api, APP_MODE, PRIORITIES, TASK_STATUSES, TASK_TYPES, type Priority, type Task, type TaskFilters, type TaskStatus, type TaskType, type WithPatientName } from '@/api'
 import { DataTable, type Column } from '@/components/DataTable'
 import { Button, Card, DemoBadge, ErrorBanner, LoadingState, PageHeader, StatusBadge } from '@/components/ui'
-import { formatDateTime, label, relativeTime } from '@/lib/format'
+import { formatDateTime, label, outcomeLabel, relativeTime } from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
 import { FilterSelect } from '@/features/core/FilterSelect'
+import { TaskNextAction } from '@/features/clinic/taskNextAction'
 import { isTaskOverdue, MAX_ATTEMPTS } from '@/features/core/helpers'
 
 type Due = NonNullable<TaskFilters['due']>
@@ -50,6 +51,20 @@ const COLUMNS: Column<Row>[] = [
     },
   },
   { key: 'status', header: 'Status', render: (t) => <StatusBadge value={t.status} /> },
+  ...(APP_MODE === 'clinic'
+    ? ([
+        {
+          key: 'outcome',
+          header: 'Call result',
+          render: (t: Row) =>
+            t.latest_outcome ? (
+              <StatusBadge value={t.latest_outcome} text={outcomeLabel(t.latest_outcome, true)} />
+            ) : (
+              <span className="text-xs text-slate-400">—</span>
+            ),
+        },
+      ] as Column<Row>[])
+    : []),
   { key: 'priority', header: 'Priority', render: (t) => <StatusBadge value={t.priority} /> },
   {
     key: 'last',
@@ -66,7 +81,12 @@ const COLUMNS: Column<Row>[] = [
         <span className="text-xs text-slate-400">Not attempted</span>
       ),
   },
-  { key: 'next', header: 'Next action', className: 'min-w-[11rem]', render: (t) => <span className="text-sm text-slate-700">{t.next_action}</span> },
+  {
+    key: 'next',
+    header: 'Next action',
+    className: 'min-w-[11rem]',
+    render: (t) => (APP_MODE === 'clinic' ? <TaskNextAction task={t} /> : <span className="text-sm text-slate-700">{t.next_action}</span>),
+  },
 ]
 
 export default function TasksPage() {
@@ -110,12 +130,23 @@ export default function TasksPage() {
       <PageHeader
         title="Tasks & follow-ups"
         subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Every follow-up, its status and the next action. <DemoBadge />
-          </span>
+          APP_MODE === 'clinic' ? (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              Follow-ups to dial, outcomes, and next actions for front desk.
+              <Link to="/batches" className="text-emerald-700 hover:underline">
+                Batch follow-ups →
+              </Link>
+            </span>
+          ) : (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              Every follow-up, its status and the next action. <DemoBadge />
+              <Link to="/batches" className="text-emerald-700 hover:underline">
+                Batch follow-ups →
+              </Link>
+            </span>
+          )
         }
       />
-
       <Card bodyClassName="space-y-4">
         <div className="flex flex-wrap items-end gap-3">
           <FilterSelect label="Task type" value={filters.task_type ?? ''} options={TASK_TYPES.map((v) => ({ value: v, label: label(v) }))} onChange={(v) => setFilter('task_type', v)} allLabel="All types" />

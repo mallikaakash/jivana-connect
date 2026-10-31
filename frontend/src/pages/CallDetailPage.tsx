@@ -1,18 +1,23 @@
 import { AlertTriangle, ClipboardList, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { api } from '@/api'
+import { api, APP_MODE, ApiError } from '@/api'
+import { useStaffRole } from '@/features/clinic/workspace'
 import { PatientSummary } from '@/components/PatientSummary'
-import { Card, DemoBadge, DetailList, EmptyState, ExtractedFields, PageHeader, StatusBadge } from '@/components/ui'
+import { Button, Card, DemoBadge, DetailList, EmptyState, ExtractedFields, PageHeader, StatusBadge } from '@/components/ui'
 import { isActiveCall } from '@/features/secondary/helpers'
-import { BackLink, LoadGate, Note, RefreshError, TextLink, VoiceModeBadge } from '@/features/secondary/common'
+import { BackLink, LoadGate, Note, RefreshError, TextLink } from '@/features/secondary/common'
 import { Transcript } from '@/features/secondary/Transcript'
-import { formatDateTime, label, relativeTime } from '@/lib/format'
+import { formatDateTime, label, outcomeLabel, relativeTime } from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
 
 export default function CallDetailPage() {
   const { callId = '' } = useParams()
+  const [staffRole] = useStaffRole()
   const [pollMs, setPollMs] = useState<number>()
+  const [staffNote, setStaffNote] = useState('')
+  const [staffBusy, setStaffBusy] = useState(false)
+  const [staffErr, setStaffErr] = useState<string | null>(null)
 
   const { data, error, loading, reload } = useAsync(
     async () => {
@@ -43,10 +48,14 @@ export default function CallDetailPage() {
       <PageHeader
         title={call.purpose}
         subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs">{call.call_id}</span> · {label(call.workflow)} <VoiceModeBadge isLive={call.is_live} />
-            {!call.is_live && <DemoBadge>Simulated call</DemoBadge>}
-          </span>
+          APP_MODE === 'clinic' ? (
+            label(call.workflow)
+          ) : (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <span className="font-mono text-xs">{call.call_id}</span> · {label(call.workflow)}
+              {!call.is_live && <DemoBadge>Simulated call</DemoBadge>}
+            </span>
+          )
         }
       />
       <RefreshError error={error} reload={reload} />
@@ -58,6 +67,39 @@ export default function CallDetailPage() {
         </div>
       )}
 
+      {APP_MODE === 'clinic' && staffRole === 'desk' && ['initiating', 'in_progress', 'queued', 'no_answer', 'failed'].includes(call.status) && (
+        <Card title="Staff override" className="mb-6">
+          <p className="text-sm text-slate-600">Mark this call complete if you reached the patient by phone or handled it outside the automated call.</p>
+          {staffErr && <p className="mt-2 text-sm text-red-600">{staffErr}</p>}
+          <textarea
+            className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            rows={2}
+            placeholder="Brief note for the record"
+            value={staffNote}
+            onChange={(e) => setStaffNote(e.target.value)}
+          />
+          <Button
+            className="mt-3"
+            loading={staffBusy}
+            onClick={async () => {
+              setStaffBusy(true)
+              setStaffErr(null)
+              try {
+                await api.staffCompleteCall(callId, { action: 'staff_complete', summary: staffNote || 'Completed by staff', author: 'Front desk' })
+                setPollMs(undefined)
+                void reload()
+              } catch (e) {
+                setStaffErr(e instanceof ApiError ? e.message : 'Could not update call')
+              } finally {
+                setStaffBusy(false)
+              }
+            }}
+          >
+            Mark complete
+          </Button>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card title="Status">
@@ -66,7 +108,9 @@ export default function CallDetailPage() {
                 <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Call status</div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <StatusBadge value={call.status} />
-                  {call.outcome && <StatusBadge value={call.outcome} text={`Outcome: ${label(call.outcome)}`} />}
+                  {call.outcome && (
+                    <StatusBadge value={call.outcome} text={`Outcome: ${outcomeLabel(call.outcome, APP_MODE === 'clinic')}`} />
+                  )}
                 </div>
                 <Note className="mt-2">Whether the conversation itself happened and finished.</Note>
               </div>
@@ -90,7 +134,12 @@ export default function CallDetailPage() {
             )}
           </Card>
 
-          <Card title="Transcript" actions={call.transcript && call.transcript_is_example ? <DemoBadge>Prototype example</DemoBadge> : undefined}>
+          <Card
+            title="Transcript"
+            actions={
+              call.transcript && call.transcript_is_example && APP_MODE !== 'clinic' ? <DemoBadge>Prototype example</DemoBadge> : undefined
+            }
+          >
             {call.transcript && call.transcript.length > 0 ? (
               <>
                 {call.transcript_is_example && <Note className="mb-3">Illustrative transcript for the demo, not a recording of a real conversation.</Note>}
@@ -108,13 +157,15 @@ export default function CallDetailPage() {
             <ExtractedFields fields={call.extracted_fields} />
           </Card>
 
-          <Card title="Backend processing result">
-            {call.processing_result ? (
-              <p className="text-sm leading-relaxed text-slate-700">{call.processing_result}</p>
-            ) : (
-              <EmptyState title={active ? 'Not processed yet' : 'No processing result recorded'} />
-            )}
-          </Card>
+          {APP_MODE !== 'clinic' && (
+            <Card title="Backend processing result">
+              {call.processing_result ? (
+                <p className="text-sm leading-relaxed text-slate-700">{call.processing_result}</p>
+              ) : (
+                <EmptyState title={active ? 'Not processed yet' : 'No processing result recorded'} />
+              )}
+            </Card>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -160,9 +211,13 @@ export default function CallDetailPage() {
                 { label: 'Created', value: formatDateTime(call.created_at) },
                 { label: 'Started', value: formatDateTime(call.started_at) },
                 { label: 'Completed', value: call.completed_at ? `${formatDateTime(call.completed_at)} (${relativeTime(call.completed_at)})` : '—' },
-                { label: 'Voice', value: call.is_live ? 'Live Jiya call (Bolna)' : 'Simulated — no real phone call' },
-                ...(call.provider_call_id
-                  ? [{ label: 'Provider call ID', value: <span className="break-all font-mono text-xs">{call.provider_call_id}</span> }]
+                ...(APP_MODE !== 'clinic'
+                  ? [
+                      { label: 'Voice', value: call.is_live ? 'Live Jiya call (Bolna)' : 'Simulated — no real phone call' },
+                      ...(call.provider_call_id
+                        ? [{ label: 'Provider call ID', value: <span className="break-all font-mono text-xs">{call.provider_call_id}</span> }]
+                        : []),
+                    ]
                   : []),
               ]}
             />

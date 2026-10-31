@@ -1,0 +1,43 @@
+name: Deploy clinic (manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: cd backend && uv sync && uv run pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: cd frontend && npm ci && npm run build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: |
+          chmod +x scripts/deploy-gcp-clinic.sh scripts/deploy-firebase-clinic.sh
+          if [[ -n "${{ secrets.GCP_ENV_FILE }}" ]]; then
+            printf '%s' "${{ secrets.GCP_ENV_FILE }}" > backend/.env.gcp
+          fi
+          test -f backend/.env.gcp || { echo "Set Actions secret GCP_ENV_FILE (contents of backend/.env.gcp)"; exit 1; }
+      - name: Deploy API
+        env:
+          ENV_FILE: backend/.env.gcp
+        run: ./scripts/deploy-gcp-clinic.sh
+      - name: Deploy Hosting
+        run: ./scripts/deploy-firebase-clinic.sh
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

@@ -1,13 +1,14 @@
 import clsx from 'clsx'
 import { AlertTriangle, ArrowLeft, Bot, ChevronRight, Clock, Lock, PhoneCall, PhoneForwarded, ShieldCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { api, ApiError, type Call, type TaskStatus } from '@/api'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { api, ApiError, APP_MODE, type Call, type TaskStatus } from '@/api'
+import { useStaffRole } from '@/features/clinic/workspace'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { PatientSummary } from '@/components/PatientSummary'
 import { Timeline } from '@/components/Timeline'
 import { Button, Card, DemoBadge, EmptyState, ErrorBanner, ExtractedFields, LoadingState, StatusBadge } from '@/components/ui'
-import { formatDateTime, label, relativeTime } from '@/lib/format'
+import { formatDateTime, label, outcomeLabel, relativeTime } from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
 import { AppointmentCard } from '@/features/core/AppointmentCard'
 import { CallModeBadge } from '@/features/core/CallModeBadge'
@@ -27,14 +28,18 @@ function appendStatus(trail: TaskStatus[], s: TaskStatus): TaskStatus[] {
 
 export default function TaskDetailPage() {
   const { taskId = '' } = useParams()
+  const [staffRole] = useStaffRole()
+  const isDoctorClinic = APP_MODE === 'clinic' && staffRole === 'doctor'
+  const navigate = useNavigate()
   const [polling, setPolling] = useState(false)
   const detail = useAsync(() => api.getTask(taskId), [taskId], polling ? 2000 : undefined)
-  const meta = useAsync(() => api.getMeta(), [])
 
   const [session, setSession] = useState<CallSession | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const [startError, setStartError] = useState<Error | null>(null)
+  const terminalTask = (s: TaskStatus) => s === 'completed' || s === 'cancelled' || s === 'failed'
 
   // New task → forget any previous call session.
   useEffect(() => {
@@ -78,27 +83,40 @@ export default function TaskDetailPage() {
     }
   }
 
+  async function cancelTask() {
+    if (!data || !window.confirm('Cancel this follow-up? It will leave the patient list but stop appearing in queues.')) return
+    setCancelling(true)
+    try {
+      await api.cancelTask(taskId)
+      void detail.reload()
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Could not cancel task')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
   if (!data) {
     if (detail.error)
       return (
         <div className="space-y-4">
-          <BackLink />
+          <BackLink doctorClinic={isDoctorClinic} />
           <ErrorBanner error={detail.error} onRetry={detail.error instanceof ApiError && detail.error.status === 404 ? undefined : () => void detail.reload()} />
         </div>
       )
     return <LoadingState text="Loading task…" />
   }
 
-  const { task, patient, appointment, calls, events } = data
+  const { task, patient, appointment, calls, events, spawned_followup } = data
   const overdue = isTaskOverdue(task)
   const callRunning = panelCall ? !isCallTerminal(panelCall.status) : false
   const statusChanged = session && session.trail.length > 1 && sessionCall && isCallTerminal(sessionCall.status)
   const retryAllowed = startError instanceof ApiError ? startError.retryAllowed : false
-  const voiceMode = meta.data?.voice_mode
+  const latestCompletedCall = calls.find((c) => c.status === 'completed')
 
   return (
     <div className="space-y-6">
-      <BackLink />
+      <BackLink doctorClinic={isDoctorClinic} />
 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -107,8 +125,12 @@ export default function TaskDetailPage() {
             <span className="rounded-full bg-navy-50 px-1.5 py-0.5 text-navy-700">{label(task.task_type)}</span>
             <span>{task.department}</span>
             <span className="text-slate-300">·</span>
-            <span className="font-mono text-[11px]">{task.task_id}</span>
-            <DemoBadge />
+            {APP_MODE !== 'clinic' && (
+              <>
+                <span className="font-mono text-[11px]">{task.task_id}</span>
+                <DemoBadge />
+              </>
+            )}
           </div>
           <h1 className="mt-2 text-[2.25rem] leading-[1.1] font-light text-navy-900">{task.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -127,49 +149,97 @@ export default function TaskDetailPage() {
 
       <div className="stagger grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          {/* Next action + call control */}
           <section className="rounded-2xl border border-slate-200 border-l-4 border-l-teal-500 bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-teal-700">Next action</p>
-                <p className="mt-1.5 font-serif text-[1.6rem] leading-snug font-light tracking-[-0.02em] text-navy-900">{task.next_action}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Attempts: <span className="font-medium text-slate-700">{task.attempt_count} of {MAX_ATTEMPTS}</span>
-                  {task.last_attempt_at && ` · last ${relativeTime(task.last_attempt_at)}`}
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-teal-700">
+                  {isDoctorClinic ? 'Clinical next step' : 'Next action'}
                 </p>
-              </div>
-              <div className="flex flex-col items-stretch gap-1.5 sm:items-end">
-                <Button
-                  icon={<PhoneCall className="h-4 w-4" />}
-                  disabled={!task.call_eligible || callRunning}
-                  loading={starting}
-                  onClick={() => {
-                    setStartError(null)
-                    setConfirmOpen(true)
-                  }}
-                >
-                  Start Jiya call
-                </Button>
-                {!task.call_eligible && task.call_ineligible_reason && !callRunning && (
-                  <p className="flex max-w-xs items-start gap-1 text-xs text-slate-500 sm:text-right">
-                    <Lock className="mt-0.5 h-3 w-3 shrink-0" />
-                    {task.call_ineligible_reason}
+                <p className="mt-1.5 font-serif text-[1.6rem] leading-snug font-light tracking-[-0.02em] text-navy-900">{task.next_action}</p>
+                {!isDoctorClinic && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Attempts: <span className="font-medium text-slate-700">{task.attempt_count} of {MAX_ATTEMPTS}</span>
+                    {task.last_attempt_at && ` · last ${relativeTime(task.last_attempt_at)}`}
                   </p>
                 )}
-                {voiceMode && <p className="text-[11px] text-slate-400 sm:text-right">Voice mode: {voiceMode === 'live' ? 'live (Bolna)' : 'simulated'}</p>}
               </div>
+              {!isDoctorClinic && (
+                <div className="flex flex-col items-stretch gap-1.5 sm:items-end">
+                  <Button
+                    icon={<PhoneCall className="h-4 w-4" />}
+                    disabled={!task.call_eligible || callRunning}
+                    loading={starting}
+                    onClick={() => {
+                      setStartError(null)
+                      setConfirmOpen(true)
+                    }}
+                  >
+                    Start Jiya call
+                  </Button>
+                  {APP_MODE === 'clinic' && !terminalTask(task.status) && (
+                    <Button variant="secondary" loading={cancelling} disabled={callRunning} onClick={() => void cancelTask()}>
+                      Cancel follow-up
+                    </Button>
+                  )}
+                  {!task.call_eligible && task.call_ineligible_reason && !callRunning && (
+                    <p className="flex max-w-xs items-start gap-1 text-xs text-slate-500 sm:text-right">
+                      <Lock className="mt-0.5 h-3 w-3 shrink-0" />
+                      {task.call_ineligible_reason}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-            {startError && (
+            {startError && !isDoctorClinic && (
               <div className="mt-4">
                 <ErrorBanner error={startError} onRetry={retryAllowed ? () => setConfirmOpen(true) : undefined} />
                 <p className="mt-1.5 text-xs text-slate-500">The task was not changed.</p>
               </div>
             )}
+            {isDoctorClinic && task.escalation_id && (
+              <div className="mt-4">
+                <Button variant="secondary" icon={<AlertTriangle className="h-4 w-4" />} onClick={() => navigate(`/escalations/${task.escalation_id}`)}>
+                  Open clinical review
+                </Button>
+              </div>
+            )}
+            {!isDoctorClinic && spawned_followup && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950">
+                <p className="font-medium">Desk follow-up created from this call</p>
+                <p className="mt-0.5 text-amber-900/90">{spawned_followup.title}</p>
+                <Link to={`/tasks/${spawned_followup.task_id}`} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-teal-800 hover:underline">
+                  Open follow-up task
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </div>
+            )}
           </section>
 
-          {panelCall && <LiveCallPanel call={panelCall} task={task} trail={session?.trail ?? [task.status]} />}
+          {!isDoctorClinic && panelCall && <LiveCallPanel call={panelCall} task={task} trail={session?.trail ?? [task.status]} />}
 
-          {/* Purpose + safe context */}
+          {isDoctorClinic && latestCompletedCall && (
+            <Card
+              title="Latest call"
+              actions={
+                latestCompletedCall.outcome ? (
+                  <StatusBadge value={latestCompletedCall.outcome} text={outcomeLabel(latestCompletedCall.outcome, true)} />
+                ) : undefined
+              }
+            >
+              {latestCompletedCall.summary ? (
+                <p className="text-sm leading-relaxed text-slate-800">{latestCompletedCall.summary}</p>
+              ) : (
+                <EmptyState title="No summary on file" description="Open the call record for transcript and extracted fields." />
+              )}
+              <div className="mt-3">
+                <Link to={`/calls/${latestCompletedCall.call_id}`} className="text-sm font-medium text-teal-700 hover:underline">
+                  Read full call record
+                </Link>
+              </div>
+            </Card>
+          )}
+
+          {!isDoctorClinic && (
           <Card title="Why Jiya is calling">
             <p className="text-sm text-slate-800">{task.purpose}</p>
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -182,6 +252,7 @@ export default function TaskDetailPage() {
               </p>
             </div>
           </Card>
+          )}
 
           {task.test_tracking && (
             <Card title="Test / report tracking">
@@ -194,7 +265,10 @@ export default function TaskDetailPage() {
             {task.latest_outcome || task.extracted_fields ? (
               <ExtractedFields fields={task.extracted_fields} />
             ) : (
-              <EmptyState title="No call result yet" description="Start a Jiya call to capture a structured outcome." />
+              <EmptyState
+                title="No call result yet"
+                description={isDoctorClinic ? 'Front desk will place the follow-up call when due.' : 'Start a Jiya call to capture a structured outcome.'}
+              />
             )}
           </Card>
 
@@ -221,7 +295,7 @@ export default function TaskDetailPage() {
                           Outcome <StatusBadge value={c.outcome} />
                         </span>
                       )}
-                      <CallModeBadge isLive={c.is_live} />
+                      {APP_MODE !== 'clinic' && <CallModeBadge isLive={c.is_live} />}
                       <ChevronRight className="h-4 w-4 text-slate-300" />
                     </Link>
                   </li>
@@ -259,8 +333,8 @@ export default function TaskDetailPage() {
             >
               <AlertTriangle className="h-5 w-5 shrink-0" />
               <span className="flex-1">
-                <span className="block font-medium">Escalation linked</span>
-                <span className="text-xs">Routed for staff review — open escalation</span>
+                <span className="block font-medium">{isDoctorClinic ? 'Clinical review' : 'Escalation linked'}</span>
+                <span className="text-xs">{isDoctorClinic ? 'Patient question or concern — open review' : 'Routed for staff review — open escalation'}</span>
               </span>
               <ChevronRight className="h-4 w-4" />
             </Link>
@@ -274,33 +348,36 @@ export default function TaskDetailPage() {
 
       {detail.error && <ErrorBanner error={`Could not refresh: ${detail.error.message}`} onRetry={() => void detail.reload()} />}
 
-      <ConfirmDialog
-        open={confirmOpen}
-        title="Start Jiya call?"
-        confirmLabel="Start call"
-        loading={starting}
-        onConfirm={() => void startCall()}
-        onCancel={() => !starting && setConfirmOpen(false)}
-      >
-        <p>
-          Jiya will call <span className="font-medium text-navy-800">{patient.display_name}</span> about:
-        </p>
-        <p className="mt-1.5 rounded-xl bg-slate-50 px-3 py-2 text-slate-700">{task.purpose}</p>
-        <p className="mt-2 text-xs text-slate-500">In live mode this places a real phone call to the demo recipient.</p>
-        {voiceMode && (
-          <p className="mt-2">
-            <CallModeBadge isLive={voiceMode === 'live'} long />
+      {!isDoctorClinic && (
+        <ConfirmDialog
+          open={confirmOpen}
+          title="Start Jiya call?"
+          confirmLabel="Start call"
+          loading={starting}
+          onConfirm={() => void startCall()}
+          onCancel={() => !starting && setConfirmOpen(false)}
+        >
+          <p>
+            Jiya will call <span className="font-medium text-navy-800">{patient.display_name}</span> about:
           </p>
-        )}
-      </ConfirmDialog>
+          <p className="mt-1.5 rounded-xl bg-slate-50 px-3 py-2 text-slate-700">{task.purpose}</p>
+          <p className="mt-2 text-xs text-slate-500">
+            {APP_MODE === 'clinic'
+              ? 'Jiya will call the mobile number on the patient record.'
+              : 'In live mode this places a real phone call to the demo recipient.'}
+          </p>
+        </ConfirmDialog>
+      )}
     </div>
   )
 }
 
-function BackLink() {
+function BackLink({ doctorClinic }: { doctorClinic?: boolean }) {
+  const to = doctorClinic ? '/' : '/tasks'
+  const label = doctorClinic ? 'Today' : 'Tasks & follow-ups'
   return (
-    <Link to="/tasks" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-navy-800">
-      <ArrowLeft className="h-4 w-4" /> Tasks &amp; follow-ups
+    <Link to={to} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-navy-800">
+      <ArrowLeft className="h-4 w-4" /> {label}
     </Link>
   )
 }
